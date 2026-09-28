@@ -92,7 +92,7 @@ jobs:
 
       - name: Publish GitHub Release
         if: steps.signing.outputs.signed == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body: |
             ## NetPilot ${{ github.ref_name }}
