@@ -197,7 +197,7 @@ jobs:
 
       - name: Upload unsigned artifact (workflow copy)
         if: steps.signing.outputs.signed != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: netpilot-unsigned-release
           path: |

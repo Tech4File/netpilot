@@ -119,7 +119,7 @@ jobs:
           shred -u /tmp/keystore.pass 2>/dev/null || rm -f /tmp/keystore.pass
 
       - name: Backup artifact — download once, store safely, then delete it
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: netpilot-release-keystore-BACKUP
           path: netpilot-release.jks

@@ -56,14 +56,14 @@ jobs:
         run: ./gradlew :app:assembleDebugAndroidTest
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: netpilot-debug-apk
           path: app/build/outputs/apk/debug/*.apk
 
       - name: Upload test & lint reports (always, for debugging)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: reports
           path: |
@@ -127,14 +127,14 @@ jobs:
 
       - name: Upload instrumented test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: instrumented-reports-api-${{ matrix.api-level }}
           path: app/build/outputs/androidTest-results/
 
       - name: Upload failure diagnostics (logcat + adb state)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: instrumented-diagnostics-api-${{ matrix.api-level }}
           path: failed-diagnostics.txt
