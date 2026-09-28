@@ -1,0 +1,138 @@
+name: Signing setup (one-time)
+
+# One-click signing bootstrap — NO personal computer needed.
+#
+# Run this ONCE: Actions -> "Signing setup (one-time)" -> Run workflow.
+# It generates a release keystore + a strong random password on GitHub's
+# runner and writes all four secrets into the repository automatically:
+#   ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD /
+#   ANDROID_KEY_ALIAS    / ANDROID_KEY_PASSWORD
+# After it finishes, every Release run is SIGNED — nothing else to do.
+#
+# A backup artifact (netpilot-release-keystore-BACKUP) is uploaded for you
+# to download once and store safely, then let it expire (7 days).
+# Why the backup matters: if this repository is ever deleted, its secrets
+# die with it — and the keystore is the only way to ship updates that
+# install over the already-released builds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "REGENERATE a new key even if secrets exist (breaks update compatibility — old installs cannot update, must uninstall)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: write # write repository secrets via the API
+  contents: read
+
+jobs:
+  setup:
+    name: Generate keystore & store secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Guard — refuse to silently replace an existing signing key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          if gh secret list -R "$GITHUB_REPOSITORY" 2>/dev/null | grep -q "ANDROID_KEYSTORE_B64"; then
+            if [ "${{ inputs.force }}" != "true" ]; then
+              echo "::error::Signing secrets already exist. Running again would create a NEW key — already-released apps could not update (signature change). Tick the 'force' input only if you really want to reset, then uninstall existing installs."
+              exit 1
+            fi
+            echo "::warning::FORCED ROTATION: a new key replaces the old one. Old installed builds must be uninstalled before the next signed release."
+          else
+            echo "No existing signing secrets — proceeding with first-time setup."
+          fi
+
+      - name: Generate keystore + strong random password
+        run: |
+          set -e
+          PASS="$(openssl rand -base64 36 | tr -d '/+=\n' | cut -c1-40)"
+          echo "::add-mask::$PASS"
+          printf '%s' "$PASS" > /tmp/keystore.pass
+          keytool -genkeypair -v -keystore netpilot-release.jks -storetype PKCS12 \
+            -alias netpilot -keyalg RSA -keysize 4096 -validity 10000 \
+            -storepass "$PASS" \
+            -dname "CN=NetPilot, OU=Home, O=Tech4File, L=Warangal, ST=Telangana, C=IN" \
+            2>&1 | tail -1
+          echo "keystore generated (password masked; stored only in secrets)"
+
+      - name: Write the 4 secrets into this repository (automated)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PASS_FILE: /tmp/keystore.pass
+        run: |
+          set -e
+          python3 -m pip install --quiet --user pynacl 2>/dev/null || \
+            python3 -m pip install --quiet --user --break-system-packages pynacl
+          python3 - <<'PY'
+          import base64, json, os
+          from urllib import request
+          from nacl import encoding, public
+          from nacl.public import SealedBox
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          tok  = os.environ["GH_TOKEN"]
+          API  = "https://api.github.com"
+
+          def api(url, data=None, method="GET"):
+              body = None if data is None else json.dumps(data).encode()
+              req = request.Request(API + url, data=body, method=method, headers={
+                  "Authorization": f"Bearer {tok}",
+                  "Accept": "application/vnd.github+json",
+                  "Content-Type": "application/json",
+                  "User-Agent": "netpilot-signing-setup",
+              })
+              with request.urlopen(req) as r:
+                  payload = r.read()
+              return json.loads(payload) if payload else {}
+
+          pk  = api(f"/repos/{repo}/actions/secrets/public-key")
+          box = SealedBox(public.PublicKey(pk["key"].encode(), encoding.Base64Encoder()))
+
+          def put_secret(name, raw):
+              enc = box.encrypt(raw.encode())
+              api(f"/repos/{repo}/actions/secrets/{name}",
+                  {"encrypted_value": base64.b64encode(enc).decode(), "key_id": pk["key_id"]},
+                  method="PUT")
+              print(f"  secret {name}: written")
+
+          b64 = base64.b64encode(open("netpilot-release.jks", "rb").read()).decode()
+          pw  = open(os.environ["PASS_FILE"]).read().strip()
+          put_secret("ANDROID_KEYSTORE_B64", b64)
+          put_secret("ANDROID_KEYSTORE_PASSWORD", pw)
+          put_secret("ANDROID_KEY_ALIAS", "netpilot")
+          put_secret("ANDROID_KEY_PASSWORD", pw)
+          print("ALL 4 SIGNING SECRETS CONFIGURED")
+          PY
+          shred -u /tmp/keystore.pass 2>/dev/null || rm -f /tmp/keystore.pass
+
+      - name: Backup artifact — download once, store safely, then delete it
+        uses: actions/upload-artifact@v4
+        with:
+          name: netpilot-release-keystore-BACKUP
+          path: netpilot-release.jks
+          retention-days: 7
+
+      - name: Summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## ✅ Signing is configured
+          1. Download the **netpilot-release-keystore-BACKUP** artifact (runs list → this run → Artifacts) and store it safely (USB + private cloud). Then delete the artifact.
+          2. Now open **Actions → Release → Run workflow → auto-patch → Run**.
+          3. The release will be **SIGNED** — the release page flips from "⚠️ UNSIGNED" to "✅ Signed release build".
+
+          *The password was generated randomly, is masked in all logs, and lives only in the repository secrets. You never need to type it.*
+          EOF
+          cat "$GITHUB_STEP_SUMMARY"

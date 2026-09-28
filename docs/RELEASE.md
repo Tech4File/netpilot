@@ -1,50 +1,77 @@
 # Release Runbook
 
-## One-time setup (repo maintainer)
+Releases are **fully automated** — no local git, no tag commands needed.
 
-1. **Create a release keystore** (keep it private, back it up — losing it ends updateability):
-   ```bash
-   keytool -genkeypair -v -keystore netpilot-release.jks -storetype PKCS12 \
-     -alias netpilot -keyalg RSA -keysize 4096 -validity 10000
-   ```
-2. **Add repository secrets** (Settings → Secrets and variables → Actions):
-   | Secret | Value |
-   |---|---|
-   | `ANDROID_KEYSTORE_B64` | `base64 -w0 netpilot-release.jks` |
-   | `ANDROID_KEYSTORE_PASSWORD` | keystore password |
-   | `ANDROID_KEY_ALIAS` | `netpilot` |
-   | `ANDROID_KEY_PASSWORD` | key password |
+## Cutting a release (2 minutes, from the browser)
 
-## Cutting a release
+1. Make sure `main` is green (CI + Security workflows on the latest commit).
+2. GitHub → **Actions → Release → Run workflow**.
+3. Choose the **version bump**:
+   | Choice | From `1.1.2` | Use when |
+   |---|---|---|
+   | `auto-patch` (default) | `1.1.3` | bug fixes only |
+   | `auto-minor` | `1.2.0` | new features, backwards-compatible |
+   | `auto-major` | `2.0.0` | big changes / breaking UI or behaviour |
+   | `manual` | whatever you type (e.g. `2.0.1`) | special cases |
+4. Click **Run**. The workflow then, automatically:
+   - runs the verification gate (all unit tests + lint) — failures abort everything;
+   - reads the **latest release tag** and derives the next version (never allows a
+     version that is not strictly newer — it refuses and fails loudly);
+   - bumps `versionName` + increments `versionCode` in `app/build.gradle.kts`,
+     commits and pushes that to the default branch (`[skip ci]`);
+   - creates and pushes the `vX.Y.Z` tag;
+   - builds the **release APK and AAB**, generates **SHA-256 checksums** and a
+     **source zip**;
+   - **publishes the GitHub Release** with all files attached (signed when
+     secrets exist, otherwise clearly labelled *UNSIGNED*).
 
-```bash
-# 1. Ensure main is green (CI + Security workflows)
-# 2. Bump versionCode/versionName in app/build.gradle.kts
-# 3. Tag and push
-git tag -a v1.0.0 -m "NetPilot 1.0.0"
-git push origin main --tags
-```
+A tag push (`git tag v1.2.0 && git push origin v1.2.0`) still works and does
+exactly the same thing.
 
-The **Release** workflow then:
-1. Runs the verification gate (all unit tests + lint) — failures abort everything
-2. Decodes the keystore from secrets to `.ci-release-keystore.jks` (git-ignored)
-3. Builds `assembleRelease` + `bundleRelease` with R8 and resource shrinking
-4. Publishes a GitHub Release with the signed APK, AAB, and SHA-256 checksums
-5. Changelog is generated from commit history since the previous tag
+## Where the version is visible after installing
 
-**Fail-safe:** if any signing secret is missing, the workflow still produces an
-*unsigned* artifact for testing but **refuses to publish a release**.
+The APK is built *after* the version bump, so the installed app shows exactly
+the release version:
+- left navigation rail footer: `v1.2.0`
+- **Settings → About**: app name, version name and version code
+- Android system: Settings → Apps → NetPilot → version
 
-## Verifying artifacts
-```bash
-sha256sum -c checksums-sha256.txt
-apksigner verify --print-certs app-release.apk        # signer fingerprint
-aapt2 dump badging app-release.apk | head             # package/version/SDKs
-```
+`versionCode` increments with every release so Android treats each new APK as
+an in-place update (no uninstall needed).
 
-## Install on Android TV
-```bash
-adb connect <TV_IP>:5555
-adb install -r app-release.apk
-adb shell pm grant app.netpilot android.permission.WRITE_SECURE_SETTINGS
-```
+## One-time signing setup (2 clicks — no computer tools needed)
+
+Without secrets the workflow still publishes releases (unsigned APK/AAB,
+labelled as such). To sign, run the bootstrap workflow **once**:
+
+1. GitHub → **Actions → "Signing setup (one-time)" → Run workflow → Run**.
+   It generates a keystore + a strong random password on GitHub's runner and
+   writes all four secrets automatically (`ANDROID_KEYSTORE_B64`,
+   `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`).
+   The password is masked in every log — you never need to know it.
+2. Download the `netpilot-release-keystore-BACKUP` artifact from that run,
+   store it safely (USB + private cloud), then delete the artifact.
+   *If the repository is ever deleted, its secrets die with it — the backup
+   keystore is the only way to keep shipping updates that install over the
+   released builds.*
+3. Now every **Release** run signs automatically (label flips to
+   "✅ Signed release build").
+
+Manual alternative (if you prefer your own key): create a keystore with
+`keytool -genkeypair -v -keystore netpilot-release.jks -storetype PKCS12
+-alias netpilot -keyalg RSA -keysize 4096 -validity 10000` and add the four
+secrets by hand (Settings → Secrets and variables → Actions), then delete
+`.github/workflows/signing-setup.yml`.
+
+> ⚠️ Android signature rule: a signed APK cannot install **over** an
+> unsigned/debug-signed one — uninstall the old app first when switching.
+> Afterwards keep the keystore forever: updates must always carry the same
+> signature.
+
+## Repository settings worth checking (once)
+
+- Settings → Actions → General → **Workflow permissions**: allow
+  *Read and write permissions* (the Release workflow pushes the version bump
+  commit and the tag; the workflow also declares this itself, but if the
+  repo forces read-only, publishing fails with 403).
+- Nothing else is required — `GITHUB_TOKEN` is used automatically.

@@ -6,6 +6,7 @@ NetPilot project manifest — every tracked file.
 .github/workflows/ci.yml
 .github/workflows/release.yml
 .github/workflows/security.yml
+.github/workflows/signing-setup.yml
 .gitignore
 CODEOWNERS
 CONTRIBUTING.md

@@ -1,16 +1,26 @@
 name: Release
 
-# Tag-driven release: full verification, signed APK/AAB, checksums, changelog.
+# Fully automated release — NO local git needed:
+#   Actions -> Release -> Run workflow -> enter version (e.g. 1.1.1) -> Run.
+# Produces a GitHub Release with: release APK (+ AAB when signing secrets
+# exist), SHA-256 checksums, and a source zip. Unsigned releases are still
+# published (clearly labelled) so the release is always visible.
 #
-# Required repository secrets for signed releases:
+# Optional repository secrets for SIGNED releases (docs/RELEASE.md):
 #   ANDROID_KEYSTORE_B64      base64 of your PKCS12 keystore
 #   ANDROID_KEYSTORE_PASSWORD keystore password
 #   ANDROID_KEY_ALIAS         key alias
 #   ANDROID_KEY_PASSWORD      key password
-# Without secrets the workflow still produces an UNSIGNED artifact but refuses
-# to publish a GitHub Release (fail-safe, see docs/RELEASE.md).
+#
+# Manual alternative (still fully automated): push a tag `vX.Y.Z`.
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. 1.1.2 (SemVer, no leading v)"
+        required: true
+        type: string
   push:
     tags: ["v*.*.*"]
 
@@ -25,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Ensure gradlew is executable
         run: chmod +x gradlew
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
@@ -47,12 +57,73 @@ jobs:
       - name: Ensure gradlew is executable
         run: chmod +x gradlew
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
 
       - uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve version (previous release -> next version)
+        id: ver
+        run: |
+          set -e
+          # Tag pushes define their own version; UI runs derive it from the
+          # previous release + the chosen bump type.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            NEXT="${GITHUB_REF_NAME#v}"
+            echo "source=tag" >> "$GITHUB_OUTPUT"
+          else
+            git fetch --tags --quiet origin || true
+            LAST=$(git tag --list 'v*' --sort=-v:refname | head -1 | sed 's/^v//')
+            if [ -z "$LAST" ]; then
+              # No releases yet: seed from the version in build.gradle.kts
+              LAST=$(grep -oP 'versionName = "\K[0-9.]+' app/build.gradle.kts)
+            fi
+            MAJOR=${LAST%%.*}; REST=${LAST#*.}; MINOR=${REST%%.*}; PATCH=${REST#*.}
+            case "${{ inputs.bump }}" in
+              auto-patch) NEXT="$MAJOR.$MINOR.$((PATCH+1))" ;;
+              auto-minor) NEXT="$MAJOR.$((MINOR+1)).0" ;;
+              auto-major) NEXT="$((MAJOR+1)).0.0" ;;
+              manual)     NEXT="${{ inputs.version }}" ;;
+              *) echo "::error::Unknown bump type"; exit 1 ;;
+            esac
+            echo "source=auto (previous release: v$LAST)" >> "$GITHUB_OUTPUT"
+            if ! [ "$(printf '%s\n%s\n' "$LAST" "$NEXT" | sort -V | head -1)" = "$LAST" ] || [ "$NEXT" = "$LAST" ]; then
+              echo "::error::Requested version '$NEXT' is not newer than the latest release 'v$LAST' — refusing."
+              exit 1
+            fi
+          fi
+          if ! [[ "$NEXT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must be SemVer like 1.2.0 (got '$NEXT')"; exit 1
+          fi
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEXT" >> "$GITHUB_OUTPUT"
+          echo "Releasing: v$NEXT" | tee "$GITHUB_STEP_SUMMARY"
+
+      - name: Bump versionName/versionCode and tag this release
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          TAG="${{ steps.ver.outputs.tag }}"
+          VNAME=$(grep -oP 'versionName = "\K[0-9.]+' app/build.gradle.kts)
+          if [ "$VNAME" != "$VERSION" ]; then
+            VCODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+            sed -i "s/versionCode = [0-9]\+/versionCode = $((VCODE+1))/; s/versionName = \"[0-9.]*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
+            git config user.name  "netpilot-release-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git commit -am "chore(release): v$VERSION [skip ci]"
+            BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+            git push origin "HEAD:refs/heads/$BRANCH"
+            echo "bumped $VNAME -> $VERSION (versionCode $((VCODE+1)))"
+          else
+            echo "versionName already $VERSION — no bump needed"
+          fi
+          if git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
+            echo "tag $TAG already exists"
+          else
+            git tag "$TAG" HEAD
+            git push origin "$TAG"
+          fi
 
       - name: Detect signing configuration
         id: signing
@@ -62,7 +133,7 @@ jobs:
             echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/.ci-release-keystore.jks"
           else
             echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Signing secrets missing — building UNSIGNED artifact and skipping publish. See docs/RELEASE.md"
+            echo "::warning::Signing secrets not set — the release will be published UNSIGNED (labelled as such). See docs/RELEASE.md to enable signing."
           fi
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
@@ -72,13 +143,11 @@ jobs:
 
       - name: Build signed release APK + AAB
         if: steps.signing.outputs.signed == 'true'
-        run: |
-          ./gradlew :app:assembleRelease :app:bundleRelease
+        run: ./gradlew :app:assembleRelease :app:bundleRelease
 
-      - name: Build unsigned release APK (testing artifact only)
+      - name: Build unsigned release APK + AAB
         if: steps.signing.outputs.signed != 'true'
-        run: |
-          ./gradlew :app:assembleRelease
+        run: ./gradlew :app:assembleRelease :app:bundleRelease
 
       - name: Generate checksums
         run: |
@@ -86,42 +155,52 @@ jobs:
           find apk -name "*.apk" -exec sha256sum {} \; | tee checksums-sha256.txt
           find bundle -name "*.aab" -exec sha256sum {} \; >> checksums-sha256.txt || true
 
-      - name: Generate changelog from commits
-        if: steps.signing.outputs.signed == 'true'
-        id: changelog
+      - name: Package source zip
         run: |
-          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || git rev-list --max-parents=0 HEAD)
-          echo "changes<<EOF" >> "$GITHUB_OUTPUT"
-          git log --pretty="format:- %s (%h)" "${PREV}..${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          VERSION="${{ steps.ver.outputs.version }}"
+          git archive --format=zip -o "NetPilot-v${VERSION}-source.zip" HEAD
+          sha256sum "NetPilot-v${VERSION}-source.zip" | tee -a app/build/outputs/checksums-sha256.txt || true
 
-      - name: Publish GitHub Release
-        if: steps.signing.outputs.signed == 'true'
-        uses: softprops/action-gh-release@v2
+      - name: Publish GitHub Release (signed or unsigned)
+        uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: NetPilot v${{ steps.ver.outputs.version }}
+          generate_release_notes: true
           body: |
-            ## NetPilot ${{ github.ref_name }}
+            ## NetPilot v${{ steps.ver.outputs.version }}
 
-            Signed release build. Verify with the SHA-256 checksums below.
+            ${{ steps.signing.outputs.signed == 'true' && '✅ **Signed release build.**' || '⚠️ **UNSIGNED build** (no signing secrets configured) — fine for sideloading/testing; see docs/RELEASE.md to enable signing.' }} Verify downloads with the SHA-256 checksums attached.
 
-            ### Changes
-            ${{ steps.changelog.outputs.changes }}
-
-            ### Install
-            Sideload the APK, then run the one-time ADB grant:
+            ### Install on Android TV / phone
+            1. Sideload the release APK (`adb install …` or install from Files).
+            2. Grant the one-time permission (no root needed):
             ```
             adb shell pm grant app.netpilot android.permission.WRITE_SECURE_SETTINGS
             ```
+            3. Open NetPilot → PRIVATE DNS → add a provider hostname → activate.
+
+            ### Updating
+            Installs directly **over any previous signed NetPilot release** — your
+            profiles and settings are kept (versionCode always increases).
+            Coming from an **unsigned/debug** build? Android will refuse the
+            update ("App not installed"): uninstall the old one first, install
+            this, then re-run the ADB grant command above (uninstalling clears
+            that permission; updates do not).
+
+            Built automatically by the Release workflow from verified source (all tests green).
           files: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
             app/build/outputs/checksums-sha256.txt
+            NetPilot-v*-source.zip
 
-      - name: Upload unsigned artifact (no publish)
+      - name: Upload unsigned artifact (workflow copy)
         if: steps.signing.outputs.signed != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: netpilot-unsigned-release
           path: |
             app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
             app/build/outputs/checksums-sha256.txt

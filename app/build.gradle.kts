@@ -19,15 +19,15 @@ val releaseSigningActive: Boolean = listOf(
 
 android {
     namespace = "app.netpilot"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.netpilot"
         // Android 9 (Pie) — the release that introduced system-wide Private DNS.
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en")
