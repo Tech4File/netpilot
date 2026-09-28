@@ -16,7 +16,7 @@ preferenceKtx = "1.2.1"
 
 # Test-only tooling (never shipped in the APK)
 junit = "4.13.2"
-robolectric = "4.14.1"
+robolectric = "4.17"
 androidxTestCore = "1.6.1"
 androidxTestExtJunit = "1.2.1"
 espresso = "3.6.1"
