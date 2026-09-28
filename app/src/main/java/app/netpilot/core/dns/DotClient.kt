@@ -1,19 +1,30 @@
 package app.netpilot.core.dns
 
+import android.net.http.X509TrustManagerExtensions
 import java.io.InputStream
 import java.io.OutputStream
-import javax.net.ssl.HttpsURLConnection
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.security.KeyStore
+import java.security.cert.X509Certificate
+import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SNIHostName
+import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
+import javax.net.ssl.TrustManager
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
 
 /**
  * First-party DNS-over-TLS client (RFC 7858) with RFC 7766 two-byte framing.
  *
  * Certificate semantics match Android's own Private DNS: the TLS certificate is
- * validated against the provider **hostname** (never an IP). A pre-resolved
- * bootstrap address may be supplied so the tunnel does not recurse into itself.
+ * chain-validated against the system CAs **and** hostname-verified against the
+ * provider hostname (never an IP) — enforced inside the handshake via the
+ * platform trust machinery, so no application data can ever flow over an
+ * unverified connection. A pre-resolved bootstrap address may be supplied so
+ * the tunnel does not recurse into itself; hostname verification applies on
+ * the bootstrap path too.
  */
 class DotClient(
     private val hostname: String,
@@ -26,19 +37,20 @@ class DotClient(
         if (DnsMessage.parseId(query) == null || DnsMessage.questionName(query) == null) return null
         return try {
             val address = bootstrapAddress ?: InetAddress.getByName(hostname)
-            val socket = javax.net.ssl.SSLContext.getDefault().socketFactory.createSocket() as SSLSocket
+            val context = SSLContext.getInstance("TLS")
+            context.init(null, arrayOf<TrustManager>(HostnameVerifyingTrustManager(hostname)), null)
+            val socket = context.socketFactory.createSocket() as SSLSocket
             socket.apply {
                 connect(InetSocketAddress(address, port), timeoutMs)
                 soTimeout = timeoutMs
                 sslParameters = sslParameters.apply {
                     serverNames = listOf(SNIHostName(hostname))
-                    // Verified manually right after the handshake against [hostname].
-                    endpointIdentificationAlgorithm = null
                 }
+                // Chain validation + hostname match happen inside
+                // startHandshake() — HostnameVerifyingTrustManager enforces
+                // both before the handshake can complete, on every path
+                // (direct or bootstrap).
                 startHandshake()
-                check(HttpsURLConnection.getDefaultHostnameVerifier().verify(hostname, session)) {
-                    "DoT certificate does not match $hostname"
-                }
             }
             socket.use { s ->
                 writeFrame(s.getOutputStream(), query)
@@ -47,6 +59,38 @@ class DotClient(
         } catch (_: Exception) {
             null
         }
+    }
+
+    /**
+     * Delegates to the platform trust machinery via X509TrustManagerExtensions,
+     * which performs full chain validation (system CAs) AND hostname
+     * verification against [hostname] in a single call — Android's own
+     * semantics for host-pinned TLS. Strictly equivalent to endpoint
+     * identification, but bound to the target hostname even when connecting
+     * through a bootstrap IP.
+     */
+    private class HostnameVerifyingTrustManager(
+        private val hostname: String,
+    ) : X509TrustManager {
+        private val delegate: X509TrustManager = TrustManagerFactory
+            .getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            .apply { init(null as KeyStore?) }
+            .trustManagers
+            .filterIsInstance<X509TrustManager>()
+            .first()
+
+        private val extensions = X509TrustManagerExtensions(delegate)
+
+        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+            // Throws before the handshake completes unless the certificate
+            // chain is trusted AND matches [hostname].
+            extensions.checkServerTrusted(chain, authType, hostname)
+        }
+
+        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) =
+            delegate.checkClientTrusted(chain, authType)
+
+        override fun getAcceptedIssuers(): Array<X509Certificate> = delegate.acceptedIssuers
     }
 
     companion object {

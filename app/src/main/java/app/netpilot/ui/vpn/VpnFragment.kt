@@ -3,6 +3,7 @@ package app.netpilot.ui.vpn
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
+import android.text.method.PasswordTransformationMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -274,7 +275,11 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         dialogBinding.etServer.setText(existing?.serverHost.orEmpty())
         dialogBinding.etPort.setText(existing?.serverPort?.toString() ?: "1194")
         dialogBinding.etUsername.setText(existing?.username.orEmpty())
+        // Mask credential fields in code as well as via the XML inputType —
+        // masking must be provable at the call site (CodeQL sensitive-text).
+        dialogBinding.etPassword.setTransformationMethod(PasswordTransformationMethod.getInstance())
         dialogBinding.etPassword.setText(existing?.password.orEmpty())
+        dialogBinding.etPsk.setTransformationMethod(PasswordTransformationMethod.getInstance())
         dialogBinding.etPsk.setText(existing?.preSharedKey.orEmpty())
 
         dialogBinding.btnImportOvpn.setOnClickListener {
