@@ -5,6 +5,7 @@ build/
 
 # IDE
 .idea/
+.vscode/
 *.iml
 .DS_Store
 local.properties
@@ -23,6 +24,6 @@ captures/
 # Kotlin compiler workspace
 .kotlin/
 
-# IDE
-.vscode/
-.idea/
+# Releases / binaries
+releases/
+
