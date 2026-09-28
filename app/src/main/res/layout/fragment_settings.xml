@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipToPadding="false"
+    android:fillViewport="true"
+    android:paddingHorizontal="@dimen/screen_padding"
+    android:paddingTop="@dimen/screen_padding"
+    android:paddingBottom="@dimen/space_32"
+    android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/space_16"
+            android:text="@string/settings_title"
+            style="@style/TextAppearance.NetPilot.Title" />
+
+        <app.netpilot.ui.components.SettingRow
+            android:id="@+id/row_theme"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:npIcon="@drawable/ic_palette"
+            app:npTitle="@string/row_theme" />
+
+        <app.netpilot.ui.components.SettingRow
+            android:id="@+id/row_security"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:npIcon="@drawable/ic_verified"
+            app:npTitle="@string/row_security" />
+
+        <app.netpilot.ui.components.SettingRow
+            android:id="@+id/row_export"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:npIcon="@drawable/ic_export"
+            app:npTitle="@string/row_export" />
+
+        <app.netpilot.ui.components.SettingRow
+            android:id="@+id/row_import"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:npIcon="@drawable/ic_import"
+            app:npTitle="@string/row_import" />
+
+        <app.netpilot.ui.components.SettingRow
+            android:id="@+id/row_privacy"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:npIcon="@drawable/ic_globe"
+            app:npTitle="@string/row_privacy" />
+
+        <app.netpilot.ui.components.SettingRow
+            android:id="@+id/row_licenses"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:npIcon="@drawable/ic_description"
+            app:npTitle="@string/row_licenses" />
+
+        <app.netpilot.ui.components.SettingRow
+            android:id="@+id/row_about"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:npIcon="@drawable/ic_info"
+            app:npTitle="@string/row_about" />
+
+        <TextView
+            android:id="@+id/settings_footer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_24"
+            android:gravity="center"
+            android:text="@string/tagline"
+            android:textColor="@color/on_surface_variant"
+            android:textSize="@dimen/text_small" />
+    </LinearLayout>
+</ScrollView>

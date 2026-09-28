@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NetPilot</string>
+    <string name="app_full_name">NetPilot — Private DNS &amp; VPN</string>
+    <string name="tagline">Command your network.</string>
+
+    <!-- Tabs -->
+    <string name="tab_dashboard">Dashboard</string>
+    <string name="tab_dns">Private DNS</string>
+    <string name="tab_vpn">VPN</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Dashboard -->
+    <string name="protection_status">Protection status</string>
+    <string name="status_protected">Fully protected</string>
+    <string name="status_dns_only">DNS protected</string>
+    <string name="status_vpn_only">VPN active</string>
+    <string name="status_unprotected">No protection</string>
+    <string name="protection_sub_protected">Your connections are encrypted end-to-end.</string>
+    <string name="protection_sub_dns">DNS lookups are encrypted with DNS-over-TLS.</string>
+    <string name="protection_sub_vpn">Traffic is tunneled through your VPN.</string>
+    <string name="protection_sub_none">Enable Private DNS or VPN to get started.</string>
+    <string name="quick_actions_section">Quick controls</string>
+    <string name="quick_dns_title">Private DNS</string>
+    <string name="quick_vpn_title">VPN</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="state_automatic">Automatic</string>
+    <string name="dns_no_profile_set">No profile selected</string>
+    <string name="setup_required_title">One-time setup needed</string>
+    <string name="setup_required_body">Grant NetPilot a single secure-settings permission over ADB (2 minutes, no root). Until then, Private DNS can be viewed but not changed.</string>
+    <string name="setup_open_guide">Open setup guide</string>
+    <string name="network_section">Your network</string>
+    <string name="network_type">Connection</string>
+    <string name="network_interface">Interface</string>
+    <string name="network_dns_servers">Active DNS servers</string>
+    <string name="network_private_dns">Private DNS</string>
+    <string name="network_none">—</string>
+    <string name="network_unavailable">Not connected</string>
+    <string name="net_wifi">Wi-Fi</string>
+    <string name="net_ethernet">Ethernet</string>
+    <string name="net_cellular">Cellular</string>
+    <string name="net_vpn">VPN tunnel</string>
+    <string name="net_other">Other</string>
+    <string name="dns_vpn_advisory_title">VPN and Private DNS are both on</string>
+    <string name="dns_vpn_advisory_body">These can run together. Your VPN may serve its own DNS; with strict Private DNS selected, Android encrypts lookups with DNS-over-TLS even inside the tunnel — VPN DNS features may be bypassed. Nothing is blocked; this is an advisory only.</string>
+
+    <!-- Private DNS -->
+    <string name="dns_title">Private DNS</string>
+    <string name="dns_description">Encrypts every DNS lookup with DNS-over-TLS (DoT) to a provider you trust.</string>
+    <string name="dns_status_active">Active</string>
+    <string name="dns_status_automatic">Automatic</string>
+    <string name="dns_status_off">Off</string>
+    <string name="dns_mode_off">Off</string>
+    <string name="dns_mode_automatic">Automatic</string>
+    <string name="dns_mode_custom">Profiles</string>
+    <string name="secure_dns_card_title">Zero-setup Secure DNS</string>
+    <string name="secure_dns_card_body">Encrypts DNS through a local VPN tunnel to your selected provider — no ADB and no computer needed. Android asks for VPN permission once (works with the remote).</string>
+    <string name="secure_dns_switch_cd">Zero-setup secure DNS tunnel switch</string>
+    <string name="secure_dns_session">NetPilot Secure DNS</string>
+    <string name="secure_dns_notification">Protecting DNS via %1$s (VPN mode)</string>
+    <string name="secure_dns_enabled_toast">Secure DNS (VPN mode) started for %1$s</string>
+    <string name="secure_dns_stopped_toast">Secure DNS (VPN mode) stopped</string>
+    <string name="secure_dns_need_profile">Add a DNS profile first — it is the provider this tunnel will use</string>
+    <string name="secure_dns_consent_failed">VPN permission was not granted</string>
+    <string name="secure_dns_vpn_replaced">Your other NetPilot VPN was stopped — Android allows one VPN per app</string>
+    <string name="secure_dns_hint">Independent of system Private DNS: this mode works everywhere without ADB. Apps with hard-coded DNS may bypass any DNS setting — strict system Private DNS (via the ADB grant) remains the strongest option.</string>
+    <string name="dns_profiles_section">Your DNS profiles</string>
+    <string name="dns_add_profile">Add DNS profile</string>
+    <string name="dns_hint_single_active">Activating a profile automatically deactivates the previous one — only one DNS provider is ever active.</string>
+    <string name="dns_profile_activated">%1$s is now your Private DNS provider</string>
+    <string name="dns_profile_deactivated">Private DNS turned off</string>
+    <string name="dns_deactivate_confirm_title">Turn off Private DNS?</string>
+    <string name="dns_deactivate_confirm_msg">DNS lookups will go back to your router or carrier in plain text.</string>
+    <string name="dns_no_permission_title">Permission needed</string>
+    <string name="dns_no_permission_body">NetPilot needs the WRITE_SECURE_SETTINGS permission to change Private DNS. It is granted once over ADB — open the setup guide for copy-paste steps.</string>
+    <string name="dialog_dns_add_title">New DNS profile</string>
+    <string name="dialog_dns_edit_title">Edit DNS profile</string>
+    <string name="field_name">Profile name</string>
+    <string name="field_hostname">Private DNS hostname</string>
+    <string name="hostname_helper">DNS-over-TLS provider, e.g. dns.google or one.one.one.one</string>
+    <string name="err_name_required">Give this profile a name</string>
+    <string name="err_hostname_empty">Enter a provider hostname</string>
+    <string name="err_hostname_too_long">Hostname is too long</string>
+    <string name="err_hostname_bad">Not a valid hostname — use letters, digits, dots and hyphens</string>
+    <string name="err_hostname_ip">Private DNS needs a hostname (e.g. dns.google), not an IP address</string>
+    <string name="delete_profile_title">Delete profile?</string>
+    <string name="delete_profile_msg">\u201C%1$s\u201D will be removed from this device. The system DNS setting stays untouched unless this profile was active.</string>
+    <string name="empty_profiles_title">No DNS profiles yet</string>
+    <string name="empty_profiles_body">Add your first DoT provider — for example Google, Cloudflare or AdGuard — and switch between them instantly.</string>
+
+    <!-- VPN -->
+    <string name="vpn_title">VPN</string>
+    <string name="vpn_description">Tunnel your traffic through a server you control. Profiles stay on this device.</string>
+    <string name="vpn_status_connected">Connected</string>
+    <string name="vpn_status_disconnected">Disconnected</string>
+    <string name="vpn_add_profile">Add VPN profile</string>
+    <string name="vpn_hint_exclusive">Android keeps one VPN active system-wide — connecting a profile always replaces the previous one.</string>
+    <string name="vpn_profiles_section">Your VPN profiles</string>
+    <string name="vpn_type_ikev2">IKEv2 / IPsec</string>
+    <string name="vpn_type_openvpn">OpenVPN</string>
+    <string name="vpn_dialog_add_title">New VPN profile</string>
+    <string name="vpn_dialog_edit_title">Edit VPN profile</string>
+    <string name="field_server">Server address</string>
+    <string name="field_port">Port</string>
+    <string name="field_username">Username</string>
+    <string name="field_password">Password</string>
+    <string name="field_psk">Pre-shared key (optional)</string>
+    <string name="field_psk_hint">Leave empty for username/password (EAP) auth</string>
+    <string name="btn_import_ovpn">Import .ovpn file</string>
+    <string name="btn_import_ca">Import CA certificate (.pem/.crt)</string>
+    <string name="err_ca_invalid">That file is not a valid X.509 certificate</string>
+    <string name="ca_imported_ok">Certificate imported</string>
+    <string name="ikev2_need_ca">Username/password IKEv2 requires the server\u2019s CA certificate. Import it, or switch to a pre-shared key.</string>
+    <string name="ovpn_imported_ok">Config parsed — server %1$s:%2$s</string>
+    <string name="err_server_invalid">Enter a valid server address</string>
+    <string name="err_port_invalid">Port must be 1–65535</string>
+    <string name="err_no_ovpn">Import a .ovpn config or fill in the fields</string>
+    <string name="vpn_unsupported_device">Not supported here</string>
+    <string name="vpn_unsupported_device_msg">Native IKEv2/IPsec platform VPN requires Android 11 or newer. On this device you can still manage OpenVPN profiles.</string>
+    <string name="vpn_consent_failed">VPN permission was not granted</string>
+    <string name="vpn_start_failed">Could not start the VPN — check the profile and try again</string>
+    <string name="ovpn_engine_title">OpenVPN engine</string>
+    <string name="ovpn_engine_msg">Your config was imported and validated. To keep this app 100%% first-party code, the OpenVPN data-channel engine is a pluggable module that is not bundled (see README → VPN). On Android 11+ use an IKEv2/IPsec profile, which works fully natively.</string>
+    <string name="vpn_profile_connected_toast">Connecting to %1$s…</string>
+    <string name="vpn_profile_stopped_toast">VPN disconnected</string>
+    <string name="empty_vpn_title">No VPN profiles yet</string>
+    <string name="empty_vpn_body">Add your own IKEv2/IPsec server or import an OpenVPN .ovpn config. Nothing is shared with any service.</string>
+    <string name="delete_vpn_profile_msg">\u201C%1$s\u201D will be removed from this device.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="row_theme">Theme</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="row_security">Security &amp; permissions</string>
+    <string name="security_value_granted">Secure-settings permission granted</string>
+    <string name="security_value_missing">Setup required</string>
+    <string name="row_export">Export profiles</string>
+    <string name="row_import">Import profiles</string>
+    <string name="export_ok">Profiles exported</string>
+    <string name="export_err">Export failed</string>
+    <string name="import_ok">Imported %1$d profile(s)</string>
+    <string name="import_err">Import failed — invalid or unreadable file</string>
+    <string name="row_privacy">Privacy</string>
+    <string name="privacy_title">Your data never leaves the device</string>
+    <string name="privacy_body">NetPilot has no analytics, no ads, no trackers and no telemetry. Profiles are stored in the app\u2019s private storage and excluded from platform backups. The only network traffic the app itself generates is DNS resolution and your own VPN tunnels. The full source is in the repository for you to verify.</string>
+    <string name="row_licenses">Open-source licenses</string>
+    <string name="licenses_title">Open-source licenses</string>
+    <string name="licenses_note">NetPilot\u2019s runtime code uses only first-party Android libraries. The projects below are used by the build &amp; test tooling, or are the platform libraries this app is built on. We are grateful to their authors.</string>
+    <string name="row_about">About</string>
+    <string name="about_title">About NetPilot</string>
+    <string name="about_body_fmt">Version %1$s (build %2$d)\nDevice: %3$s\nAndroid %4$s (API %5$d)\n\nBuilt for Android TV first — works on phones and tablets too.</string>
+
+    <!-- Setup guide -->
+    <string name="setup_title">One-time setup</string>
+    <string name="setup_intro">Android protects system settings: no app — including this one — can change Private DNS on its own. The standard, root-free way is to grant one permission over ADB. It takes about two minutes and survives reboots and app updates.</string>
+    <string name="setup_step1">1. On the TV/phone: enable Developer options, then turn on \u201CUSB debugging\u201D (on Android TV it is \u201CNetwork debugging\u201D — note the IP:port shown).</string>
+    <string name="setup_step2">2. On your computer with adb installed, connect:  adb connect &lt;TV-IP&gt;:5555   (phones: plug in USB instead).</string>
+    <string name="setup_step3">3. Grant the permission:</string>
+    <string name="setup_step4">4. Press \u201CI granted it\u201D below — NetPilot verifies instantly. You never need to do this again.</string>
+    <string name="setup_cmd_title">ADB command</string>
+    <string name="setup_note_tv">No computer? Two options: (1) use Zero-setup Secure DNS above — one tap, no ADB at all; or (2) install Termux on any Android phone (F-Droid), run “pkg install android-tools”, then “adb connect &lt;TV-IP&gt;:5555” and run the grant command from the phone over Wi-Fi. Some TV launchers hide the Private DNS UI entirely — that is why NetPilot exists: the feature works, only the menu is missing.</string>
+    <string name="setup_verify">I granted it — verify now</string>
+    <string name="setup_granted_ok">Permission confirmed — you\u2019re all set!</string>
+
+    <!-- Misc -->
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_ok">OK</string>
+    <string name="action_copy">Copy command</string>
+    <string name="action_close">Close</string>
+    <string name="action_enable">Enable</string>
+    <string name="action_disable">Disable</string>
+    <string name="action_done">Done</string>
+    <string name="cd_logo">NetPilot logo</string>
+    <string name="cd_edit_profile">Edit profile</string>
+    <string name="cd_delete_profile">Delete profile</string>
+    <string name="cd_dns_switch">Private DNS on/off switch</string>
+    <string name="cd_vpn_switch">VPN connect/disconnect switch</string>
+    <string name="cd_status_dot">Status indicator</string>
+</resources>

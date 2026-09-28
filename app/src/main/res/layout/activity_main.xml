@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground">
+
+    <!-- TV: persistent left navigation rail (hidden on phones) -->
+    <app.netpilot.ui.components.NavRailView
+        android:id="@+id/nav_rail"
+        android:layout_width="@dimen/rail_width"
+        android:layout_height="match_parent"
+        android:background="@color/nav_rail_bg"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/space_12"
+        android:paddingTop="@dimen/space_24"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Content host -->
+    <FrameLayout
+        android:id="@+id/nav_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintStart_toEndOf="@id/nav_rail"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/nav_bottom" />
+
+    <!-- Phone / tablet: bottom navigation (hidden on TV) -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/nav_bottom"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="?attr/colorSurface"
+        android:visibility="gone"
+        app:labelVisibilityMode="labeled"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:menu="@menu/nav_bottom" />
+</androidx.constraintlayout.widget.ConstraintLayout>

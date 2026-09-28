@@ -1,0 +1,135 @@
+package app.netpilot
+
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.view.View
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.fragment.app.Fragment
+import app.netpilot.core.vpn.VpnStatusMonitor
+import app.netpilot.databinding.ActivityMainBinding
+import app.netpilot.ui.NavTab
+import app.netpilot.ui.components.NavRailView
+import app.netpilot.ui.dashboard.DashboardFragment
+import app.netpilot.ui.dns.PrivateDnsFragment
+import app.netpilot.ui.settings.SettingsFragment
+import app.netpilot.ui.vpn.VpnFragment
+
+/**
+ * Single host activity. On Android TV it renders a left navigation rail;
+ * on phones/tablets a bottom navigation bar. Fragments are shared by both.
+ */
+class MainActivity : AppCompatActivity(), NavRailView.Callback {
+
+    private lateinit var binding: ActivityMainBinding
+    private val isTv: Boolean by lazy {
+        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            resources.getBoolean(R.bool.is_television)
+    }
+    private var selectedTab: NavTab = NavTab.DASHBOARD
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        applyWindowInsets()
+
+        if (isTv) {
+            binding.navRail.visibility = View.VISIBLE
+            binding.navBottom.visibility = View.GONE
+            binding.navRail.setup(NavTab.entries.toList(), this)
+        } else {
+            binding.navRail.visibility = View.GONE
+            binding.navBottom.visibility = View.VISIBLE
+            binding.navBottom.setOnItemSelectedListener { item ->
+                val tab = tabForMenuItem(item.itemId)
+                if (tab != selectedTab) {
+                    selectTab(tab)
+                }
+                true
+            }
+            binding.navBottom.setOnItemReselectedListener { /* no-op */ }
+        }
+
+        savedInstanceState?.let {
+            selectedTab = NavTab.entries.getOrElse(it.getInt(KEY_TAB, 0)) { NavTab.DASHBOARD }
+        }
+        showFragment(selectedTab)
+        syncNavSelection()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    selectedTab != NavTab.DASHBOARD -> selectTab(NavTab.DASHBOARD)
+                    isTv && !binding.navRail.hasFocus() -> binding.navRail.focusFirstItem()
+                    else -> finish()
+                }
+            }
+        })
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(KEY_TAB, selectedTab.ordinal)
+    }
+
+    override fun onTabSelected(tab: NavTab) = selectTab(tab)
+
+    fun selectTab(tab: NavTab) {
+        selectedTab = tab
+        showFragment(tab)
+        syncNavSelection()
+    }
+
+    private fun showFragment(tab: NavTab) {
+        val fragment: Fragment = when (tab) {
+            NavTab.DASHBOARD -> DashboardFragment()
+            NavTab.PRIVATE_DNS -> PrivateDnsFragment()
+            NavTab.VPN -> VpnFragment()
+            NavTab.SETTINGS -> SettingsFragment()
+        }
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.nav_container, fragment)
+            .commit()
+    }
+
+    private fun syncNavSelection() {
+        if (isTv) binding.navRail.setActive(selectedTab)
+        val itemId = when (selectedTab) {
+            NavTab.DASHBOARD -> R.id.nav_dashboard
+            NavTab.PRIVATE_DNS -> R.id.nav_dns
+            NavTab.VPN -> R.id.nav_vpn
+            NavTab.SETTINGS -> R.id.nav_settings
+        }
+        if (binding.navBottom.selectedItemId != itemId) {
+            binding.navBottom.selectedItemId = itemId
+        }
+    }
+
+    private fun tabForMenuItem(id: Int): NavTab = when (id) {
+        R.id.nav_dns -> NavTab.PRIVATE_DNS
+        R.id.nav_vpn -> NavTab.VPN
+        R.id.nav_settings -> NavTab.SETTINGS
+        else -> NavTab.DASHBOARD
+    }
+
+    /** Android 15 edge-to-edge: pad content below system bars. */
+    private fun applyWindowInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        VpnStatusMonitor.start(this)
+    }
+
+    companion object {
+        private const val KEY_TAB = "selected_tab"
+    }
+}

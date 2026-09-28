@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared custom attributes (each custom view exposes its own styleable). -->
+    <attr name="npIcon" format="reference" />
+    <attr name="npTitle" format="reference|string" />
+    <attr name="npBody" format="reference|string" />
+    <attr name="npFocusScale" format="boolean" />
+
+    <declare-styleable name="FocusCardView">
+        <attr name="npFocusScale" />
+    </declare-styleable>
+
+    <declare-styleable name="EmptyStateView">
+        <attr name="npIcon" />
+        <attr name="npTitle" />
+        <attr name="npBody" />
+    </declare-styleable>
+
+    <declare-styleable name="SettingRow">
+        <attr name="npIcon" />
+        <attr name="npTitle" />
+    </declare-styleable>
+</resources>

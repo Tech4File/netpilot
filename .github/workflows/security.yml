@@ -1,0 +1,61 @@
+name: Security
+
+# Continuous security posture: secret leak detection on every push/PR,
+# dependency review on PRs, weekly scheduled deep scan.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret leak scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencies:
+    name: Dependency review (PRs)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Review dependencies for known vulnerabilities & license issues
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0
+
+  hardening:
+    name: Build-hardening checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fail if cleartext traffic is ever re-enabled
+        run: |
+          ! grep -rn "cleartextTrafficPermitted=\"true\"" app/src
+      - name: Fail if debuggable sneaks into release config
+        run: |
+          ! grep -rn "android:debuggable=\"true\"" app/src/main
+      - name: Fail if backup rules start leaking profile storage
+        run: |
+          grep -q "netpilot_profiles.xml" app/src/main/res/xml/backup_rules.xml
+          grep -q "netpilot_profiles.xml" app/src/main/res/xml/data_extraction_rules.xml

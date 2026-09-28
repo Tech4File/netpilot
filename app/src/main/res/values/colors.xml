@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ============================================================
+     NetPilot Design System — LIGHT palette
+     Full token reference: docs/DESIGN_SYSTEM.md
+     ============================================================ -->
+<resources>
+    <!-- Brand -->
+    <color name="brand_primary">#3D4DE0</color>
+    <color name="brand_on_primary">#FFFFFF</color>
+    <color name="brand_primary_container">#E2E5FF</color>
+    <color name="brand_on_primary_container">#0D1560</color>
+    <color name="brand_secondary">#00A896</color>
+    <color name="brand_on_secondary">#FFFFFF</color>
+    <color name="brand_secondary_container">#C8F3EC</color>
+    <color name="brand_on_secondary_container">#003B34</color>
+    <color name="brand_tertiary">#E8871E</color>
+
+    <!-- Surfaces -->
+    <color name="bg">#F4F5FA</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_variant">#EAECF4</color>
+    <color name="surface_raised">#FFFFFF</color>
+    <color name="outline">#C6CBD9</color>
+    <color name="on_surface">#171A26</color>
+    <color name="on_surface_variant">#575D72</color>
+
+    <!-- Semantic status -->
+    <color name="status_success">#148A54</color>
+    <color name="status_success_container">#D3F3E2</color>
+    <color name="status_warning">#B26200</color>
+    <color name="status_warning_container">#FFE8C2</color>
+    <color name="status_danger">#C62F45</color>
+    <color name="status_danger_container">#FFD9DE</color>
+    <color name="status_info">#2559C9</color>
+    <color name="status_info_container">#DCE5FF</color>
+
+    <!-- Focus & navigation -->
+    <color name="focus_ring">#3D4DE0</color>
+    <color name="nav_rail_bg">#FFFFFF</color>
+    <color name="nav_item_active_bg">#E2E5FF</color>
+    <color name="nav_item_inactive">#575D72</color>
+
+    <!-- Misc -->
+    <color name="radio_off">#C6CBD9</color>
+    <color name="radio_on">#3D4DE0</color>
+    <color name="code_block_bg">#171A26</color>
+    <color name="code_block_fg">#9FE8B5</color>
+    <color name="launcher_background">#3D4DE0</color>
+    <color name="splash">#3D4DE0</color>
+</resources>

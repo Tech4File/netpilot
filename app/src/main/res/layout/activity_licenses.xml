@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="@dimen/screen_padding"
+        android:paddingTop="@dimen/space_24"
+        android:text="@string/licenses_title"
+        style="@style/TextAppearance.NetPilot.Title" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="@dimen/screen_padding"
+        android:paddingTop="@dimen/space_8"
+        android:paddingBottom="@dimen/space_12"
+        android:text="@string/licenses_note"
+        style="@style/TextAppearance.NetPilot.Body" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/licenses_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingHorizontal="@dimen/screen_padding"
+        android:paddingBottom="@dimen/space_24" />
+</LinearLayout>

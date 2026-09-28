@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Profile data (DNS/VPN credentials) never leaves the device via platform backup. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="netpilot_profiles.xml" />
+    <exclude domain="sharedpref" path="netpilot_settings.xml" />
+</full-backup-content>

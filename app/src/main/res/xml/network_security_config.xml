@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zero-trust networking: the app itself performs no cleartext traffic.
+     DNS-over-TLS (853) and IKEv2/OpenVPN tunnels are all encrypted transports. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- ==========================================================
+         NetPilot theme system (Material 3, DayNight)
+         ========================================================== -->
+    <style name="Theme.NetPilot" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorOnPrimary">@color/brand_on_primary</item>
+        <item name="colorPrimaryContainer">@color/brand_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/brand_on_primary_container</item>
+        <item name="colorSecondary">@color/brand_secondary</item>
+        <item name="colorOnSecondary">@color/brand_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/brand_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/brand_on_secondary_container</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
+        <item name="colorError">@color/status_danger</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+
+        <!-- Shared component styles -->
+        <item name="materialCardViewStyle">@style/Widget.NetPilot.Card</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.NetPilot.Dialog</item>
+    </style>
+
+    <style name="Theme.NetPilot.FullScreen" parent="Theme.NetPilot" />
+
+    <!-- Typography -->
+    <style name="TextAppearance.NetPilot.Display" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="android:textSize">@dimen/text_display</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <style name="TextAppearance.NetPilot.Title" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textSize">@dimen/text_title</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <style name="TextAppearance.NetPilot.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.NetPilot.Label" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.12</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:textColor">?attr/colorPrimary</item>
+    </style>
+
+    <!-- Reusable card -->
+    <style name="Widget.NetPilot.Card" parent="Widget.Material3.CardView.Elevated">
+        <item name="cardCornerRadius">@dimen/card_radius</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
+        <item name="cardElevation">1dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="strokeColor">@color/focus_ring</item>
+        <item name="android:minHeight">@dimen/card_min_height</item>
+    </style>
+
+    <style name="Widget.NetPilot.IconButton" parent="Widget.Material3.Button.IconButton">
+        <item name="android:minWidth">@dimen/min_target</item>
+        <item name="android:minHeight">@dimen/min_target</item>
+    </style>
+
+    <style name="ThemeOverlay.NetPilot.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.NetPilot.Dialog</item>
+    </style>
+
+    <style name="ShapeAppearance.NetPilot.Dialog" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
+    </style>
+
+    <style name="TextAppearance.NetPilot.Code" parent="">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textSize">@dimen/text_small</item>
+        <item name="android:textColor">@color/code_block_fg</item>
+    </style>
+</resources>

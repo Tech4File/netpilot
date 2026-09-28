@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:parentTag="android.widget.LinearLayout"
+    tools:orientation="horizontal">
+    <View
+        android:id="@+id/pill_dot"
+        android:layout_width="@dimen/dot_size"
+        android:layout_height="@dimen/dot_size"
+        android:background="@drawable/dot_status"
+        tools:ignore="ContentDescription" />
+    <Space android:layout_width="6dp" android:layout_height="1dp" />
+    <TextView
+        android:id="@+id/pill_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="@dimen/text_small"
+        android:textStyle="bold" />
+</merge>

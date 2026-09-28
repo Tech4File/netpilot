@@ -1,0 +1,9 @@
+# Line endings & permissions — critical for cross-platform contributors
+gradlew text eol=lf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.apk binary
+*.aab binary
+*.jks binary
+*.jar binary
