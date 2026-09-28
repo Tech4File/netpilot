@@ -22,3 +22,7 @@ captures/
 
 # Kotlin compiler workspace
 .kotlin/
+
+# IDE
+.vscode/
+.idea/
