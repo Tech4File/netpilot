@@ -9,6 +9,18 @@ updates:
       androidx:
         patterns:
           - "androidx.*"
+    ignore:
+      # These three only become possible together (one coordinated upgrade):
+      # AGP 9.x needs Gradle 9.x; core-ktx >= 1.18 additionally needs
+      # AGP >= 9.1 and compileSdk >= 37. Bumping any of them alone breaks
+      # the build (CI proved it on PRs #5/#8/#11). Remove these ignores
+      # when doing the combined AGP 9 + Gradle 9 + compileSdk 37 upgrade.
+      - dependency-name: "com.android.application"
+        versions: [">=9.0.0"]
+      - dependency-name: "org.gradle"
+        versions: [">=9.0.0"]
+      - dependency-name: "androidx.core:core-ktx"
+        versions: [">=1.18.0"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

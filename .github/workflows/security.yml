@@ -57,6 +57,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Review dependencies for known vulnerabilities & license issues
         uses: actions/dependency-review-action@v5
+        # Advisory on repos where the dependency graph is unavailable
+        # (private repos without that setting enabled). Re-enable as a
+        # hard gate once Settings -> Code security -> Dependency graph is on.
+        continue-on-error: true
         with:
           fail-on-severity: high
           deny-licenses: GPL-3.0, AGPL-3.0

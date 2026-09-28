@@ -50,8 +50,8 @@ The moment you push, GitHub Actions runs automatically (free on public repos):
 There is nothing to "pick the right build" — universal by construction.
 
 ## 4. Verify nothing is missing
-`PROJECT_MANIFEST.txt` lists every tracked file. After unzipping:
+The git tree is the manifest (no stale file lists). After unzipping:
 ```bash
-diff <(unzip -l netpilot-source.zip) PROJECT_MANIFEST.txt  # or just count:
-find . -type f | wc -l
+git ls-files | wc -l        # expected file count (see netpilot-verify.txt)
+unzip -Z1 netpilot-source.zip | grep -v '/$' | wc -l   # must match
 ```
