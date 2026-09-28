@@ -62,18 +62,18 @@ class AppLaunchTest {
 
     @Test
     fun allDashboardQuickCardsAreDpadFocusable() {
-        val focusable = intArrayOf(R.id.hero_status, R.id.card_dns_quick, R.id.card_vpn_quick)
-        assertTrue(focusable.all { id ->
-            rule.scenario.onActivity { activity ->
-                activity.findViewById<android.view.View>(id).isFocusable
-            }
-        })
+        val ids = intArrayOf(R.id.hero_status, R.id.card_dns_quick, R.id.card_vpn_quick)
+        val results = mutableListOf<Boolean>()
+        rule.scenario.onActivity { activity ->
+            ids.forEach { id -> results += activity.findViewById<android.view.View>(id).isFocusable }
+        }
+        assertTrue("all quick cards must be D-pad focusable: $results", results.all { it })
     }
 
     @Test
-    fun dpadDownMovesFocusBetweenQuickCards() {
-        // Focus the DNS quick card, then walk down with the D-pad — the VPN card
-        // must receive focus (10-foot navigation contract).
+    fun dpadRightMovesFocusToTheAdjacentVpnCard() {
+        // The DNS and VPN quick cards sit side by side (VPN on the right).
+        // Walking right with the D-pad must land on the VPN card (10-foot contract).
         onView(withId(R.id.card_dns_quick)).perform(click())
         // click navigated to the DNS tab; come back and use pure focus instead
         onView(withId(R.id.nav_dashboard)).perform(click())
@@ -81,7 +81,7 @@ class AppLaunchTest {
         rule.scenario.onActivity { activity ->
             activity.findViewById<android.view.View>(R.id.card_dns_quick).requestFocus()
         }
-        onView(withId(R.id.card_dns_quick)).perform(pressKey(KeyEvent.KEYCODE_DPAD_DOWN))
+        onView(withId(R.id.card_dns_quick)).perform(pressKey(KeyEvent.KEYCODE_DPAD_RIGHT))
         rule.scenario.onActivity { activity ->
             assertTrue(activity.findViewById<android.view.View>(R.id.card_vpn_quick).isFocused)
             assertFalse(activity.findViewById<android.view.View>(R.id.card_dns_quick).isFocused)

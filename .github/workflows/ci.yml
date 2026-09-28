@@ -50,6 +50,11 @@ jobs:
       - name: Assemble debug APK (find/fix bugs BEFORE packaging)
         run: ./gradlew :app:assembleDebug
 
+      # Compile the instrumented-test APK too — catches androidTest compile
+      # errors here (2 min, no emulator) instead of after an emulator boots.
+      - name: Assemble androidTest APK (compile instrumentation early)
+        run: ./gradlew :app:assembleDebugAndroidTest
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -126,6 +131,14 @@ jobs:
         with:
           name: instrumented-reports-api-${{ matrix.api-level }}
           path: app/build/outputs/androidTest-results/
+
+      - name: Upload failure diagnostics (logcat + adb state)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-diagnostics-api-${{ matrix.api-level }}
+          path: failed-diagnostics.txt
+          if-no-files-found: ignore
 
   codeql:
     name: CodeQL security analysis
