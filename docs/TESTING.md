@@ -5,7 +5,7 @@ lint → build → instrumented tests on emulators.
 
 ## The pyramid
 
-### 1. JVM unit tests — `./gradlew :app:testDebugUnitTest` (71 tests)
+### 1. JVM unit tests — `./gradlew :app:testDebugUnitTest` (75 tests)
 Pure logic, milliseconds-fast, run on every compile in CI *before* packaging:
 
 | Suite | Covers |
@@ -22,6 +22,7 @@ Pure logic, milliseconds-fast, run on every compile in CI *before* packaging:
 | `ProfileBackupTest` | bundle round-trip, dedupe, secret-free exports |
 | `MainActivityRoboTest` (Robolectric) | activity launch, tab switching, **profile dialog validation E2E on the JVM** (rejects IP, accepts + normalizes valid host) |
 | `ThemeModeTest`, `LicenseCatalogTest` | prefs enum, attribution integrity |
+| `UiCompatibilityTest` | **form-factor matrix**: classic TV 960x540dp canvas (rail shown, bottom bar hidden), 4K TV 1920x1080dp canvas (overscan-safe paddings), smallest phone 360x640dp (all screens render & navigate) |
 
 Robolectric simulates Android (SDK 33) on the JVM: real `Settings.Global` shadow storage, real
 dialog inflation — no emulator needed.
@@ -32,7 +33,7 @@ dialog inflation — no emulator needed.
 - Gitleaks + dependency review + hardening assertions (see docs/SECURITY.md)
 
 ### 3. Instrumented tests — emulator (API 29 + API 34 matrix)
-`./gradlew connectedDebugAndroidTest` via `android-emulator-runner`:
+`./gradlew connectedDebugAndroidTest` via `android-emulator-runner` (matrix: **API 28, 29, 34, 35**):
 
 | Suite | Covers |
 |---|---|

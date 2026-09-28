@@ -63,6 +63,14 @@ Icon + title (+ subtitle) + trailing value + chevron on a FocusCard. Used across
 ### EmptyStateView
 Centered icon/title/body pair for empty lists, with D-pad-friendly "add" actions next to it.
 
+## Screen size & overscan rules
+- Everything is **dp/sp** (never px): the dp canvas stays ~960x540 on 1080p TVs and ~1920x1080 on
+  4K — physical inches (24"…80"+) change perceived size, never layout.
+- `values-television/dimens.xml` raises screen padding to **36dp** and adds a **24dp overscan
+  margin** for the nav rail — keeping all critical content inside the classic TV safe area
+  (older panels can crop up to ~5% per side via overscan).
+- Focus targets are ≥48dp; text scales with sp so system font-size settings keep working.
+
 ## TV interaction rules (docs/TV_NAVIGATION.md has the full map)
 1. Every interactive element is focusable and ≥48 dp.
 2. Focus is unmistakable: ring + lift (+ zoom on TV).

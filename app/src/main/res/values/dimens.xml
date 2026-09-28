@@ -37,4 +37,8 @@
 
     <!-- 10-foot UI: comfortable touch/d-pad targets (>= 48dp) -->
     <dimen name="min_target">48dp</dimen>
+
+    <!-- Overscan safety margin. Phones/tablets: none needed.
+         TVs override this in values-television/ (see docs/DESIGN_SYSTEM.md). -->
+    <dimen name="tv_overscan">0dp</dimen>
 </resources>

@@ -1,4 +1,4 @@
-NetPilot project manifest — every tracked file. If a file here is missing, the tree is incomplete.
+NetPilot project manifest — every tracked file.
 ================================================================================
 .gitattributes
 .github/PULL_REQUEST_TEMPLATE.md
@@ -117,6 +117,7 @@ app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 app/src/main/res/values-night/colors.xml
 app/src/main/res/values-television/bools.xml
+app/src/main/res/values-television/dimens.xml
 app/src/main/res/values/arrays.xml
 app/src/main/res/values/attrs.xml
 app/src/main/res/values/bools.xml
@@ -139,6 +140,7 @@ app/src/test/java/app/netpilot/core/vpn/OvpnConfigParserTest.kt
 app/src/test/java/app/netpilot/core/vpn/PacketOpsTest.kt
 app/src/test/java/app/netpilot/core/vpn/VpnProfileRepositoryTest.kt
 app/src/test/java/app/netpilot/ui/MainActivityRoboTest.kt
+app/src/test/java/app/netpilot/ui/UiCompatibilityTest.kt
 app/src/test/java/app/netpilot/ui/licenses/LicenseCatalogTest.kt
 app/src/test/resources/robolectric.properties
 art/icon_preview.png

@@ -8,7 +8,8 @@ profile-based **VPN** manager — behind one beautiful, remote-control-first int
 **no analytics, no ads, no telemetry, no network calls of its own.**
 
 Built for **Android TV (D-pad/remote first)**, running everywhere else too — phones and tablets,
-Android **9.0+ (API 28)** → **Android 15 (API 35)**, all densities, light & dark themes.
+Android **9.0+ (API 28)** → **Android 15 (API 35)**, all densities and screen sizes
+(24"–80"+ TVs, phones, tablets), light & dark themes.
 
 ---
 
@@ -80,7 +81,7 @@ No computer? Install Termux on any Android phone → `pkg install android-tools`
 ```bash
 git clone <this repo> && cd netpilot
 ./gradlew :app:assembleDebug          # → app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:testDebugUnitTest      # 71 JVM tests (JUnit + Robolectric)
+./gradlew :app:testDebugUnitTest      # 75 JVM tests (JUnit + Robolectric)
 ./gradlew :app:lintDebug              # Android Lint gate
 ```
 

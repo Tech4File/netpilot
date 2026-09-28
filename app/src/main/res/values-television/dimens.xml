@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android TV dimension overrides.
+     Older TV panels can apply overscan (edges cropped by up to ~5% per side).
+     All dp values below keep NetPilot inside the classic 960x540dp TV safe area. -->
+<resources>
+    <dimen name="screen_padding">36dp</dimen>
+    <dimen name="tv_overscan">24dp</dimen>
+</resources>
