@@ -277,8 +277,14 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         dialogBinding.etUsername.setText(existing?.username.orEmpty())
         // Mask credential fields in code as well as via the XML inputType —
         // masking must be provable at the call site (CodeQL sensitive-text).
+        // Masking must be provable at the call site (CodeQL sensitive-text):
+        // set the password variation on the inputType programmatically, too.
+        dialogBinding.etPassword.inputType =
+            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         dialogBinding.etPassword.setTransformationMethod(PasswordTransformationMethod.getInstance())
         dialogBinding.etPassword.setText(existing?.password.orEmpty())
+        dialogBinding.etPsk.inputType =
+            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         dialogBinding.etPsk.setTransformationMethod(PasswordTransformationMethod.getInstance())
         dialogBinding.etPsk.setText(existing?.preSharedKey.orEmpty())
 
