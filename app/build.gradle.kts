@@ -30,8 +30,8 @@ android {
         // versionName below is NEW (no matching vX.Y.Z tag exists yet). No bump
         // => the Release run checks and skips gracefully. versionCode must +1
         // with every release so signed APKs install over the previous ones.
-        versionCode = 7
-        versionName = "1.1.5"
+        versionCode = 9
+        versionName = "1.1.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en")
@@ -46,6 +46,22 @@ android {
                 keyAlias = System.getenv("ANDROID_KEY_ALIAS")
                 keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
             }
+        }
+    }
+
+    // Per-ABI APKs for the release channel (plus the universal one).
+    // NetPilot ships ZERO native code, so every APK runs on every CPU —
+    // the splits exist for store-style listings; the UNIVERSAL APK
+    // remains the recommended download.
+    splits {
+        abi {
+            // Enabled only for APK builds: ./gradlew :app:assembleRelease -PabiSplits
+            // (bundleRelease runs without the flag - AAB + splits are mutually
+            // exclusive in AGP, and the bundle already splits per-device itself.)
+            isEnable = project.hasProperty("abiSplits")
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
         }
     }
 

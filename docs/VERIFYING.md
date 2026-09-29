@@ -11,7 +11,7 @@ reproducible evidence chain — everything below was actually executed on the bu
 | APK is cryptographically signed | `apksigner verify --print-certs app-debug.apk` | Valid signature — `CN=Android Debug` — **installs directly** on any Android 9+ device/TV |
 | Release build survives R8 shrinking | `dexdump app-release-unsigned.apk` | 1,241 classes, 2.3 MB |
 | Manifest is well-formed & TV-ready | `aapt2 dump badging` | `leanback-launchable`, touchscreen not required, minSdk 28 |
-| Behaviour, not just compilation | `./gradlew :app:testDebugUnitTest` | **71 tests, 0 failures** — Robolectric executes the real activity, dialogs, settings writes and parsers on the JVM |
+| Behaviour, not just compilation | `./gradlew :app:testDebugUnitTest` | **75 tests, 0 failures** — Robolectric executes the real activity, dialogs, settings writes and parsers on the JVM |
 | Static quality gate | `./gradlew :app:lintDebug` | Clean (hard-fail mode) |
 
 The JVM tests are the strongest no-device proof available: they **launch MainActivity,
@@ -38,7 +38,7 @@ Android framework code (Robolectric), not mocks of our logic.
 ```bash
 unzip netpilot-source.zip && cd netpilot
 ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
-sha256sum app/build/outputs/apk/debug/app-debug.apk   # compare with releases/CHECKSUMS.sha256
+sha256sum app/build/outputs/apk/debug/app-debug.apk   # compare with the checksums on the GitHub Release
 ```
 
 Identical checksum requires identical toolchain versions (see `gradle/wrapper/gradle-wrapper.properties`

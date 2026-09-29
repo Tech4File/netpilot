@@ -1,16 +1,17 @@
 # ⚡ Quickstart — unzip → run → push
 
 ## 0. What's in the package
-`netpilot-source.zip` is **the complete project** — it already includes everything:
-source code, all docs, banners/icons, CI workflows, **and the prebuilt APKs** in `releases/`.
-`netpilot-apks.zip` is just the installable APKs extracted for convenience.
+`netpilot-source.zip` is **the complete project** — source code, all docs,
+banners/icons and the CI workflows. Installable APKs are **not** stored in the
+repo (binaries never belong in git): every push to `main` builds and publishes
+them automatically to **GitHub Releases** — see section 3.
 
 ## 1. Unzip & build locally (Linux / macOS / WSL)
 
 ```bash
 unzip netpilot-source.zip && cd netpilot
 chmod +x gradlew                 # ← important once, after unzipping (zip can drop the +x bit)
-./gradlew :app:testDebugUnitTest # 71 tests — expect "BUILD SUCCESSFUL"
+./gradlew :app:testDebugUnitTest # 75 tests — expect "BUILD SUCCESSFUL"
 ./gradlew :app:assembleDebug     # → app/build/outputs/apk/debug/app-debug.apk
 ```
 Requirements: JDK 17 only. Android SDK is fetched automatically by Gradle on first run
@@ -35,18 +36,22 @@ The moment you push, GitHub Actions runs automatically (free on public repos):
 - **CI**: unit tests → Lint → APK build → **instrumented tests on emulators for Android 9/10, 14 and 15**
   (the Android 14 & 15 legs grant the secure-settings permission over adb and exercise real system writes)
 - **Security**: secret scanning, dependency review, hardening assertions, CodeQL
-- **Release**: push a tag (`git tag v1.1.0 && git push --tags`) → verification gate → signed APK + AAB + checksums
-  (add the 4 keystore secrets from `docs/RELEASE.md` for signed releases; without them you get unsigned artifacts only)
+- **Release**: fully automatic — every push to `main` publishes the version set in
+  `app/build.gradle.kts` to GitHub Releases (Actions → Release → Run workflow also
+  offers patch/minor/major bumps). Add the 4 keystore secrets (or run the
+  "Signing setup (one-time)" workflow) for signed releases.
 
-## 3. The APKs users can install today
-| File in `releases/` | Use |
+## 3. What a release contains (GitHub Releases page)
+| File | Use |
 |---|---|
-| `NetPilot-v1.1.0-debug.apk` | **Installable right now** (debug-signed). Sideload on TV/phone |
-| `NetPilot-v1.1.0-release-unsigned.apk` | For testing; must be signed with your keystore before distribution |
-| `NetPilot-v1.1.0-release.aab` | Play Store upload (Play delivers per-device automatically) |
+| `NetPilot-vX.Y.Z.apk` | **Universal** — installs directly on TV/phone/tablet (RECOMMENDED) |
+| `NetPilot-vX.Y.Z.apks` | Split set: auto-detects the device on install (bundletool/SAI) |
+| `NetPilot-vX.Y.Z.apk.zip` | Fallback: all APKs + INSTALL-GUIDE.txt in one zip |
+| `NetPilot-vX.Y.Z.aab` | Play Store upload (Play delivers per-device automatically) |
+| `checksums-sha256.txt` | SHA-256 of every file above |
 
 **Architecture note:** NetPilot contains **zero native (C/C++) code** — one APK runs on
-*every* device architecture (arm64-v8a, armeabi-v7a, x86_64, x86, RISC-V) and every density.
+*every* device architecture (arm64-v8a, armeabi-v7a, x86, x86_64) and every density.
 There is nothing to "pick the right build" — universal by construction.
 
 ## 4. Verify nothing is missing

@@ -20,8 +20,10 @@ Releases are **fully automated** — no local git, no tag commands needed.
    - bumps `versionName` + increments `versionCode` in `app/build.gradle.kts`,
      commits and pushes that to the default branch (`[skip ci]`);
    - creates and pushes the `vX.Y.Z` tag;
-   - builds the **release APK and AAB**, generates **SHA-256 checksums** and a
-     **source zip**;
+   - builds the **universal + per-ABI APKs**, the **.apks split set**
+     (device auto-detect on install), the **AAB**, packages a
+     **`.apk.zip` fallback bundle** (all APKs + INSTALL-GUIDE.txt),
+     generates **SHA-256 checksums** of every file and a **source zip**;
    - **publishes the GitHub Release** with all files attached (signed when
      secrets exist, otherwise clearly labelled *UNSIGNED*).
 

@@ -6,12 +6,22 @@ name: Release
 #    already set in app/build.gradle.kts (versionName). If that version was
 #    released before, the run exits gracefully (nothing duplicate).
 # 2. MANUAL bump: Actions -> Release -> Run workflow -> pick patch/minor/major.
-#    The workflow bumps the version in source, commits and tags it.
+#    If versionName in source is already newer than the latest release tag,
+#    it is released as-is (the developer's bump wins; never downgraded).
+#    Otherwise the workflow bumps the version in source, commits and tags it.
 # 3. TAG push: pushing vX.Y.Z releases exactly that version.
 #
-# Produces: release APK + AAB (signed when the 4 ANDROID_KEYSTORE_* secrets
-# exist — see the "Signing setup (one-time)" workflow), SHA-256 checksums,
-# and a source zip, attached to the GitHub Release.
+# Produces, attached to the GitHub Release:
+#   NetPilot-vX.Y.Z.apk           universal, works on every device (RECOMMENDED)
+#   NetPilot-vX.Y.Z-<abi>.apk     per-ABI variants (content-identical: zero native code)
+#   NetPilot-vX.Y.Z.apks          split set - auto-detects the device on install
+#                                 (bundletool/SAI; density+CPU splits, signed)
+#   NetPilot-vX.Y.Z.apk.zip       fallback: all APKs + INSTALL-GUIDE.txt in one zip
+#   NetPilot-vX.Y.Z.aab           Play-Store bundle
+#   checksums-sha256.txt          SHA-256 of every staged file
+#   NetPilot-vX.Y.Z-source.zip    reproducible source archive
+# Signed when the 4 ANDROID_KEYSTORE_* secrets exist (see "Signing setup
+# (one-time)"); otherwise clearly labelled -unsigned.
 
 on:
   push:
@@ -20,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: "Rule applied to the latest release tag (the versions shown are EXAMPLES - the real next version is computed at run time)"
+        description: "Rule applied to the latest release tag (versions shown are EXAMPLES - the real next version is computed at run time)"
         required: true
         default: "auto-patch"
         type: choice
@@ -37,7 +47,7 @@ on:
 
 permissions:
   contents: write
-  actions: write # secret-name diagnostics (never values)
+  actions: write # secret-name diagnostics only (never values)
 
 jobs:
   verify:
@@ -80,19 +90,17 @@ jobs:
         id: ver
         run: |
           set -e
-          MODE="${{ github.event_name }}/${GITHUB_REF_NAME}"
+          MODE="${{ github.event_name }}"
+          DETAIL=""
           if [ "${{ github.event_name }}" = "push" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
-            # 3) Tag push: the tag defines the version.
             NEXT="${GITHUB_REF_NAME#v}"
             MODE="tag"
             DETAIL="tag push"
           elif [ "${{ github.event_name }}" = "push" ]; then
-            # 1) Push to main: release the version carried in the source.
             NEXT=$(grep -oP 'versionName = "\K[0-9.]+' app/build.gradle.kts)
             MODE="auto"
             DETAIL="push to main (versionName in source)"
           else
-            # 2) Manual dispatch: derive from the latest release tag.
             git fetch --tags --quiet origin || true
             LAST=$(git tag --list 'v*' --sort=-v:refname | head -1 | sed 's/^v//')
             if [ -z "$LAST" ]; then
@@ -109,11 +117,8 @@ jobs:
             MODE="manual"
             SRC=$(grep -oP 'versionName = "\K[0-9.]+' app/build.gradle.kts)
             if [ "$SRC" != "$LAST" ] && [ "$(printf '%s\n%s\n' "$LAST" "$SRC" | sort -V | head -1)" = "$LAST" ]; then
-              # The developer already bumped versionName in source beyond the
-              # latest release — that is their explicit intent. Release it
-              # as-is; never downgrade source to the computed number.
               NEXT="$SRC"
-              DETAIL="manual dispatch - source versionName (v$SRC) was already ahead of the latest release (v$LAST); released as-is"
+              DETAIL="manual dispatch - source versionName (v$SRC) already ahead of latest release (v$LAST); released as-is"
             else
               NEXT="$CAND"
               DETAIL="manual dispatch (previous release: v$LAST; rule gave v$CAND)"
@@ -179,7 +184,10 @@ jobs:
       - name: Detect signing configuration
         id: signing
         if: steps.dup.outputs.already_released == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -e
           if [ -n "${ANDROID_KEYSTORE_B64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
             echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/.ci-release-keystore.jks"
@@ -197,45 +205,113 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Build release APK + AAB
+      - name: Build release APKs + AAB
+        if: steps.dup.outputs.already_released == 'false'
+        env:
+          # The signing config lives in app/build.gradle.kts and reads these
+          # env vars AT BUILD TIME — they must be exported to THIS step too,
+          # not only to the detection step above.
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew :app:assembleRelease -PabiSplits   # universal + per-ABI APKs
+          ./gradlew :app:bundleRelease                 # Play bundle (splits off)
+
+      - name: Stage release files with product names
         if: steps.dup.outputs.already_released == 'false'
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease :app:bundleRelease
-
-      - name: Generate checksums
-        if: steps.dup.outputs.already_released == 'false'
-        run: |
-          cd app/build/outputs
-          find apk -name "*.apk" -exec sha256sum {} \; | tee checksums-sha256.txt
-          find bundle -name "*.aab" -exec sha256sum {} \; >> checksums-sha256.txt || true
-
-      - name: Stage release files with product names
-        if: steps.dup.outputs.already_released == 'false'
         run: |
           set -e
           VERSION="${{ steps.ver.outputs.version }}"
-          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          if echo "$APK" | grep -q "unsigned"; then
-            cp "$APK" "NetPilot-v${VERSION}-unsigned.apk"
-            echo "staged NetPilot-v${VERSION}-unsigned.apk (signing was not active)"
+          UNSIGNED=$(ls app/build/outputs/apk/release/*.apk | head -1 | grep -c unsigned || true)
+          SUFFIX=""
+          if [ "$UNSIGNED" = "1" ]; then SUFFIX="-unsigned"; fi
+          mkdir -p release-staging
+          # Headline: the UNIVERSAL apk — recommended download, every device.
+          cp app/build/outputs/apk/release/app-universal-release*.apk "release-staging/NetPilot-v${VERSION}${SUFFIX}.apk"
+          # Per-ABI variants (for .apk.zip: manual CPU-matched installs).
+          for ABI in arm64-v8a armeabi-v7a x86 x86_64; do
+            SRC=$(ls app/build/outputs/apk/release/app-${ABI}-release*.apk 2>/dev/null | head -1)
+            [ -n "$SRC" ] && cp "$SRC" "release-staging/NetPilot-v${VERSION}-${ABI}${SUFFIX}.apk"
+          done
+          AAB=$(ls app/build/outputs/bundle/release/*.aab 2>/dev/null | head -1)
+          [ -n "$AAB" ] && cp "$AAB" "release-staging/NetPilot-v${VERSION}.aab"
+
+          # .apks: bundletool split set — the single installer that detects the
+          # connected device and installs only matching density/CPU pieces.
+          # Signed with the release key when signing is active.
+          curl -sL -o /tmp/bundletool.jar "https://github.com/google/bundletool/releases/download/1.15.6/bundletool-all-1.15.6.jar"
+          if [ -f "$GITHUB_WORKSPACE/.ci-release-keystore.jks" ]; then
+            java -jar /tmp/bundletool.jar build-apks \
+              --bundle="release-staging/NetPilot-v${VERSION}.aab" \
+              --output="release-staging/NetPilot-v${VERSION}.apks" --overwrite \
+              --ks="$GITHUB_WORKSPACE/.ci-release-keystore.jks" \
+              --ks-key-alias="${ANDROID_KEY_ALIAS}" \
+              --ks-pass="pass:${ANDROID_KEYSTORE_PASSWORD}" \
+              --key-pass="pass:${ANDROID_KEY_PASSWORD}"
+            echo ".apks generated (SIGNED with the release key)"
           else
-            cp "$APK" "NetPilot-v${VERSION}.apk"
-            echo "staged NetPilot-v${VERSION}.apk (signed)"
+            java -jar /tmp/bundletool.jar build-apks \
+              --bundle="release-staging/NetPilot-v${VERSION}.aab" \
+              --output="release-staging/NetPilot-v${VERSION}.apks" --overwrite
+            echo "::warning::.apks generated UNSIGNED (no signing secrets) — install via bundletool requires a signed set."
           fi
-          AAB=$(ls app/build/outputs/bundle/release/*.aab | head -1)
-          cp "$AAB" "NetPilot-v${VERSION}.aab"
-          echo "staged NetPilot-v${VERSION}.aab"
+
+          cat > release-staging/INSTALL-GUIDE.txt <<'GUIDE'
+          NetPilot - which download do I use?
+          ===================================
+          MOST PEOPLE:  NetPilot-v*.apk  (universal)
+            Installs directly on any Android 9+ device: Android TV /
+            Google TV, phones, tablets - every CPU, every screen density.
+
+          ADVANCED:  NetPilot-v*.apks  (split set - device auto-detect)
+            A single file containing density/CPU split APKs. On install it
+            detects the connected device and pushes only the matching
+            pieces. Requires adb + bundletool:
+              bundletool install-apks --apks NetPilot-v*.apks
+            or an on-device split installer app (e.g. SAI). Generated from
+            the same signed build as the release.
+
+          FALLBACK:  NetPilot-v*.apk.zip  (universal + per-CPU APKs)
+            If .apks does not work in your setup: unzip and install the
+            APK that matches your device (the universal one works on
+            everything; per-ABI files are named by CPU).
+
+          PLAY STORE:  NetPilot-v*.aab
+            For uploading to Google Play (Play does per-device delivery
+            automatically).
+
+          VERIFY:  checksums-sha256.txt lists the SHA-256 of every file.
+
+          First launch (TV/phone) needs the one-time permission:
+            adb shell pm grant app.netpilot android.permission.WRITE_SECURE_SETTINGS
+          Updates: install any NEWER NetPilot version straight over the
+          old one (profiles and settings are kept).
+          GUIDE
+          sed -i 's/^          //' release-staging/INSTALL-GUIDE.txt
+          (cd release-staging && zip -q "NetPilot-v${VERSION}.apk.zip" *.apk INSTALL-GUIDE.txt)
+          echo "staged (suffix: '${SUFFIX}'):"
+          ls -la release-staging/
 
       - name: Package source zip
         if: steps.dup.outputs.already_released == 'false'
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          git archive --format=zip -o "NetPilot-v${VERSION}-source.zip" HEAD
-          sha256sum "NetPilot-v${VERSION}-source.zip" | tee -a app/build/outputs/checksums-sha256.txt || true
+          git archive --format=zip -o "release-staging/NetPilot-v${VERSION}-source.zip" HEAD
+          echo "source zip staged"
+
+      - name: Generate checksums (final staged files)
+        if: steps.dup.outputs.already_released == 'false'
+        run: |
+          cd release-staging
+          sha256sum NetPilot-v*.apk NetPilot-v*.aab NetPilot-v*.apks NetPilot-v*.apk.zip NetPilot-v*-source.zip > checksums-sha256.txt
+          cat checksums-sha256.txt
 
       - name: Publish GitHub Release
         if: steps.dup.outputs.already_released == 'false'
@@ -249,6 +325,30 @@ jobs:
 
             ${{ steps.signing.outputs.signed == 'true' && '✅ **Signed release build.**' || '⚠️ **UNSIGNED build** (no signing secrets configured) — fine for sideloading/testing; run the "Signing setup (one-time)" workflow to enable signing.' }} Verify downloads with the SHA-256 checksums attached.
 
+            ### Which download?
+            | File | Use it when |
+            |---|---|
+            | `NetPilot-v*.apk` | **Most people** — universal, installs directly anywhere |
+            | `NetPilot-v*.apks` | You use bundletool/SAI — one file that auto-detects your device and installs only the matching density & CPU pieces |
+            | `NetPilot-v*.apk.zip` | `.apks` not supported on your device/tooling — unzip and install the APK for your device (universal = any device) |
+            | `NetPilot-v*.aab` | Uploading to Google Play |
+
+            ### Runs everywhere — one universal APK
+            | Device type | Covered |
+            |---|---|
+            | Android TV / Google TV (D-pad, banner, leanback launcher) | ✅ |
+            | Phones & tablets (responsive layouts, Light/Dark) | ✅ |
+            | CPU: arm64-v8a, armeabi-v7a, x86, x86_64 | ✅ all inside one APK |
+            | All screen densities (mdpi → xxxhdpi + adaptive icons) | ✅ |
+            | Density-split delivery via `.apks` (7 density splits, device-matched) | ✅ |
+
+            NetPilot contains **zero native code**, so the universal APK runs on
+            every architecture and every Android 9+ device — nothing to pick or
+            match. `NetPilot-v*.apk.zip` bundles the universal + per-ABI
+            variants with an install guide (they are content-identical).
+            `NetPilot-v*.aab` is the Play-Store bundle; Play generates optimized
+            per-device downloads from it automatically.
+
             ### Install on Android TV / phone
             1. Sideload the release APK (`adb install …` or install from Files).
             2. Grant the one-time permission (no root needed):
@@ -256,18 +356,6 @@ jobs:
             adb shell pm grant app.netpilot android.permission.WRITE_SECURE_SETTINGS
             ```
             3. Open NetPilot → PRIVATE DNS → add a provider hostname → activate.
-
-            ### Runs everywhere — one universal APK
-            | Device type | Covered |
-            |---|---|
-            | Android TV / Google TV (D-pad, banner, leanback launcher) | ✅ |
-            | Phones & tablets (responsive layouts, Light/Dark) | ✅ |
-            | CPU architectures: arm64-v8a, armeabi-v7a, x86, x86_64 | ✅ all in this one APK |
-
-            NetPilot contains **zero native code**, so this single APK runs on every
-            architecture and every Android 9+ device — nothing to pick or match.
-            (`NetPilot-v*.aab` is the Play-Store bundle; Play generates optimized
-            per-device downloads from it automatically.)
 
             ### Updating
             Installs directly **over any previous signed NetPilot release** — your
@@ -278,19 +366,17 @@ jobs:
             that permission; updates do not).
 
             Built automatically by the Release workflow from verified source (all tests green).
-
           files: |
-            NetPilot-v*.apk
-            NetPilot-v*.aab
-            app/build/outputs/checksums-sha256.txt
-            NetPilot-v*-source.zip
+            release-staging/NetPilot-v*.apk
+            release-staging/NetPilot-v*.aab
+            release-staging/NetPilot-v*.apks
+            release-staging/NetPilot-v*.apk.zip
+            release-staging/checksums-sha256.txt
+            release-staging/NetPilot-v*-source.zip
 
       - name: Upload unsigned artifact (workflow copy)
         if: steps.dup.outputs.already_released == 'false' && steps.signing.outputs.signed != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: netpilot-unsigned-release
-          path: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
-            app/build/outputs/checksums-sha256.txt
+          path: release-staging/
