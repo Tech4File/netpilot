@@ -182,4 +182,7 @@
     <string name="cd_dns_switch">Private DNS on/off switch</string>
     <string name="cd_vpn_switch">VPN connect/disconnect switch</string>
     <string name="cd_status_dot">Status indicator</string>
+    <!-- Edit dialog: secrets stay out of the UI; blank keeps the stored value -->
+    <string name="vpn_hint_keep_password">Leave blank to keep the stored password</string>
+    <string name="vpn_hint_keep_psk">Leave blank to keep the stored key</string>
 </resources>

@@ -3,7 +3,6 @@ package app.netpilot.ui.vpn
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
-import android.text.method.PasswordTransformationMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -277,16 +276,13 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         dialogBinding.etUsername.setText(existing?.username.orEmpty())
         // Mask credential fields in code as well as via the XML inputType —
         // masking must be provable at the call site (CodeQL sensitive-text).
-        // Masking must be provable at the call site (CodeQL sensitive-text):
-        // set the password variation on the inputType programmatically, too.
-        dialogBinding.etPassword.inputType =
-            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        dialogBinding.etPassword.setTransformationMethod(PasswordTransformationMethod.getInstance())
-        dialogBinding.etPassword.setText(existing?.password.orEmpty())
-        dialogBinding.etPsk.inputType =
-            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        dialogBinding.etPsk.setTransformationMethod(PasswordTransformationMethod.getInstance())
-        dialogBinding.etPsk.setText(existing?.preSharedKey.orEmpty())
+        // Secrets are NEVER loaded into the UI (CodeQL sensitive-text, and the
+        // same policy as password managers): on edit, credential fields start
+        // empty and blank means "keep the stored value" (see saveProfile).
+        if (existing != null) {
+            dialogBinding.etPassword.hint = getString(R.string.vpn_hint_keep_password)
+            dialogBinding.etPsk.hint = getString(R.string.vpn_hint_keep_psk)
+        }
 
         dialogBinding.btnImportOvpn.setOnClickListener {
             activeVpnDialogBinding = dialogBinding
@@ -380,7 +376,10 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         val name = dialogBinding.etName.text?.toString()?.trim().orEmpty()
         val server = dialogBinding.etServer.text?.toString()?.trim().orEmpty()
         val port = dialogBinding.etPort.text?.toString()?.trim()?.toIntOrNull() ?: 1194
+        // Blank credential fields mean "keep the stored value" (edit mode).
+        val currentProfile = editing
         val psk = dialogBinding.etPsk.text?.toString().orEmpty()
+            .ifBlank { currentProfile?.preSharedKey.orEmpty() }
 
         var valid = true
         if (name.isEmpty()) {
@@ -414,7 +413,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         val summary = importedSummary ?: editing?.ovpnSummary
         val authType = if (psk.isNotBlank()) app.netpilot.core.model.VpnAuthType.PSK else app.netpilot.core.model.VpnAuthType.USER_PASS
 
-        val current = editing
+        val current = currentProfile
         if (current == null) {
             repo.add(
                 VpnProfile(
@@ -441,7 +440,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
                     serverPort = port,
                     authType = authType,
                     username = dialogBinding.etUsername.text?.toString()?.trim().orEmpty(),
-                    password = dialogBinding.etPassword.text?.toString().orEmpty(),
+                    password = dialogBinding.etPassword.text?.toString().orEmpty().ifBlank { current.password },
                     preSharedKey = psk,
                     caCertPem = caCert,
                     ovpnConfig = config,

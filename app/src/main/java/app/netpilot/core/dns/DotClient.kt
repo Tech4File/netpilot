@@ -38,17 +38,17 @@ class DotClient(
             val plain = Socket()
             plain.connect(InetSocketAddress(address, port), timeoutMs)
             val socket = factory.createSocket(plain, hostname, port, true) as SSLSocket
-            socket.apply {
-                soTimeout = timeoutMs
-                sslParameters = sslParameters.apply {
-                    serverNames = listOf(SNIHostName(hostname))
-                    // Secure default: chain validation + hostname verification
-                    // are enforced by the platform before the handshake can
-                    // complete. No data ever flows on an unverified connection.
-                    endpointIdentificationAlgorithm = "HTTPS"
-                }
-                startHandshake()
-            }
+            // Direct, analyzer-visible configuration: the platform performs
+            // CA chain validation AND hostname verification against [hostname]
+            // during startHandshake() because the endpoint identification
+            // algorithm is explicitly set to "HTTPS". No data ever flows on an
+            // unverified connection.
+            val parameters: javax.net.ssl.SSLParameters = socket.sslParameters
+            parameters.setServerNames(listOf(SNIHostName(hostname)))
+            parameters.setEndpointIdentificationAlgorithm("HTTPS")
+            socket.setSSLParameters(parameters)
+            socket.soTimeout = timeoutMs
+            socket.startHandshake()
             socket.use { s ->
                 writeFrame(s.getOutputStream(), query)
                 readFrame(s.getInputStream())
