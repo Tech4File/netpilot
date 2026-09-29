@@ -125,15 +125,16 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     fun refresh() {
         val context = requireContext()
         val profiles = repo.list()
-        val vpnActive = VpnStatusMonitor.isActive(context)
+        val vpnActive = VpnStatusMonitor.ourVpnActive(context)
+        val foreignVpn = VpnStatusMonitor.foreignVpnActive(context)
         val connectedId = repo.lastConnectedId()?.takeIf { vpnActive && profiles.any { p -> p.id == it } }
 
         suppressUiCallbacks = true
         binding.vpnSwitch.isChecked = vpnActive
-        if (vpnActive) {
-            binding.vpnStatusPill.set(R.string.vpn_status_connected, R.color.status_success)
-        } else {
-            binding.vpnStatusPill.set(R.string.vpn_status_disconnected, R.color.on_surface_variant)
+        when {
+            vpnActive -> binding.vpnStatusPill.set(R.string.vpn_status_connected, R.color.status_success)
+            foreignVpn -> binding.vpnStatusPill.set(R.string.vpn_status_foreign, R.color.status_info)
+            else -> binding.vpnStatusPill.set(R.string.vpn_status_disconnected, R.color.on_surface_variant)
         }
         adapter.submit(profiles, connectedId)
         binding.vpnEmpty.visibility = if (profiles.isEmpty()) View.VISIBLE else View.GONE
@@ -144,7 +145,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     // --------------------------------------------------------------- connect
 
     private fun onRowActivated(profile: VpnProfile) {
-        val active = VpnStatusMonitor.isActive(requireContext())
+        val active = VpnStatusMonitor.ourVpnActive(requireContext())
         if (active && repo.lastConnectedId() == profile.id) {
             stopAll()
         } else {
@@ -214,6 +215,16 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     }
 
     private fun stopAll() {
+        if (!VpnStatusMonitor.ourVpnActive(requireContext())) {
+            if (VpnStatusMonitor.foreignVpnActive(requireContext())) {
+                toast(getString(R.string.vpn_foreign_active_toast))
+            } else {
+                toast(getString(R.string.vpn_not_active_toast))
+            }
+            repo.setLastConnectedId(null)
+            refresh()
+            return
+        }
         controller.stop()
         requireContext().startService(
             Intent(requireContext(), NetPilotVpnService::class.java)

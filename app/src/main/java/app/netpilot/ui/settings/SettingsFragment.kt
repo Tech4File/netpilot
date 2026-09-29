@@ -132,7 +132,7 @@ class SettingsFragment : Fragment() {
         )
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.about_title)
-            .setMessage(message)
+            .setMessage(message + "\n\n" + getString(R.string.about_repo))
             .setPositiveButton(R.string.action_ok, null)
             .show()
     }

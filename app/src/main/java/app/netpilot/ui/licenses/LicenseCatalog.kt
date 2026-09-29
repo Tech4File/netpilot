@@ -44,6 +44,18 @@ object LicenseCatalog {
             shipped = true,
         ),
         LicenseEntry(
+            "Shizuku API (RikkaApps)",
+            "Optional integration: lets NetPilot receive the WRITE_SECURE_SETTINGS grant through the Shizuku server - no PC needed. Used only when the user opts in.",
+            "MIT License",
+            shipped = true,
+        ),
+        LicenseEntry(
+            "bundletool (Google)",
+            "Builds the .apks split sets published with every release. Release-time tooling only.",
+            "Apache License 2.0",
+            shipped = false,
+        ),
+        LicenseEntry(
             "Gradle",
             "Build automation for compiling, testing and packaging. Build-time only.",
             "Apache License 2.0",

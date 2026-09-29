@@ -185,4 +185,31 @@
     <!-- Edit dialog: secrets stay out of the UI; blank keeps the stored value -->
     <string name="vpn_hint_keep_password">Leave blank to keep the stored password</string>
     <string name="vpn_hint_keep_psk">Leave blank to keep the stored key</string>
+    <!-- Dashboard: persistent guide entry point + VPN ownership states -->
+    <string name="cd_open_guide">Open the setup and permission guide</string>
+    <string name="status_foreign_vpn">VPN (other app)</string>
+    <string name="protection_sub_foreign">Another app is running a VPN — NetPilot is not</string>
+    <string name="state_foreign_vpn">Other app\'s VPN</string>
+    <string name="vpn_status_foreign">Other VPN active</string>
+    <string name="vpn_foreign_active_toast">Another app\'s VPN is active — NetPilot can only stop its own</string>
+    <string name="vpn_not_active_toast">NetPilot\'s VPN is not active</string>
+    <!-- Setup guide: Shizuku (no-PC grant path) -->
+    <string name="setup_shizuku_btn">Grant via Shizuku (no PC needed)</string>
+    <string name="setup_shizuku_install">Install Shizuku (free) — grant without a PC</string>
+    <string name="setup_shizuku_missing">Shizuku is not running. Open Shizuku, start the server (wireless debugging on Android 11+), then come back and tap “Grant via Shizuku”.</string>
+    <string name="setup_shizuku_wait">Waiting for the Shizuku permission…</string>
+    <string name="setup_shizuku_ok">Permission granted via Shizuku ✔</string>
+    <string name="setup_shizuku_failed">Shizuku did not grant the permission. Is the server running?</string>
+    <!-- Settings section headers -->
+    <string name="settings_section_general">General</string>
+    <string name="settings_section_security">Security</string>
+    <string name="settings_section_profiles">Profiles</string>
+    <string name="settings_section_about">About</string>
+    <!-- Shizuku troubleshooting + project contact -->
+    <string name="setup_shizuku_trouble_title">Shizuku grant did not complete</string>
+    <string name="setup_shizuku_causes">Common causes:\n• Shizuku is installed but the server is not running (open Shizuku → Start, use Wireless debugging on Android 11+)\n• The permission popup was dismissed or denied (Shizuku → Authorize NetPilot)\n• Battery savers killed Shizuku (allow background activity)\n• Wireless debugging restarted after a reboot — start Shizuku again</string>
+    <string name="setup_retry">Retry</string>
+    <string name="setup_report_issue">Report an issue</string>
+    <string name="setup_project_link">Project &amp; source: github.com/Tech4File/netpilot</string>
+    <string name="about_repo">Source &amp; issues: github.com/Tech4File/netpilot</string>
 </resources>

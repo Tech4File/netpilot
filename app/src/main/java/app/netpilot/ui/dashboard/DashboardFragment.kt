@@ -50,6 +50,16 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         binding.setupGuideBtn.setOnClickListener {
             SetupDialogs.showPermissionGuide(requireActivity() as MainActivity) { refresh() }
         }
+        // Persistent (i): opens the same guide any time, even when granted.
+        binding.btnInfo.setOnClickListener {
+            SetupDialogs.showPermissionGuide(requireActivity() as MainActivity) { refresh() }
+        }
+        // First-launch only: auto-show the guide when permission is missing.
+        // Closed == acknowledged; afterwards the (i) button is the way back.
+        if (!PrivateDnsManager.hasWritePermission(requireContext()) && !prefs.setupGuideShown) {
+            prefs.setupGuideShown = true
+            SetupDialogs.showPermissionGuide(requireActivity() as MainActivity) { refresh() }
+        }
         binding.advisoryCard.setOnClickListener {
             prefs.dnsVpnAdvisoryDismissed = true
             binding.advisoryCard.visibility = View.GONE
@@ -88,7 +98,10 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         val dns = PrivateDnsManager.read(context)
         val vpnActiveRaw = VpnStatusMonitor.isActive(context)
         val secureDnsOn = SecureDnsVpnService.runningHostname != null
-        val systemVpnActive = vpnActiveRaw && !secureDnsOn
+        // Only OUR tunnels count as NetPilot being "on" — device farms and
+        // other apps run VPNs too (LambdaTest finding).
+        val systemVpnActive = VpnStatusMonitor.ourVpnActive(context)
+        val foreignVpn = vpnActiveRaw && !systemVpnActive
         val dnsEncrypting = dns.mode == DnsMode.CUSTOM || secureDnsOn
         val activeProfile = dnsRepo.activeProfile()
         val providerName = activeProfile?.name ?: dns.specifier
@@ -101,6 +114,8 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
                 Triple(R.string.status_dns_only, R.string.protection_sub_dns, R.color.status_info)
             systemVpnActive ->
                 Triple(R.string.status_vpn_only, R.string.protection_sub_vpn, R.color.status_info)
+            foreignVpn ->
+                Triple(R.string.status_foreign_vpn, R.string.protection_sub_foreign, R.color.status_info)
             else ->
                 Triple(R.string.status_unprotected, R.string.protection_sub_none, R.color.status_warning)
         }
@@ -118,7 +133,13 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
             secureDnsOn -> getString(R.string.state_on) + " · " + (SecureDnsVpnService.runningHostname ?: "—") + " (VPN)"
             else -> getString(R.string.state_off)
         }
-        binding.vpnQuickState.setText(if (systemVpnActive) R.string.state_on else R.string.state_off)
+        binding.vpnQuickState.setText(
+            when {
+                systemVpnActive -> R.string.state_on
+                foreignVpn -> R.string.state_foreign_vpn
+                else -> R.string.state_off
+            },
+        )
 
         // Setup + advisory cards
         binding.setupCard.visibility =

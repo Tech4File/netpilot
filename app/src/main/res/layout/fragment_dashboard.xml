@@ -16,6 +16,23 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Persistent (i): open the setup/permission guide any time -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btn_info"
+                android:layout_width="@dimen/min_target"
+                android:layout_height="@dimen/min_target"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_open_guide"
+                android:src="@drawable/ic_info"
+                app:tint="?attr/colorOnSurfaceVariant" />
+        </LinearLayout>
+
         <!-- Hero: protection status -->
         <app.netpilot.ui.components.FocusCardView
             android:id="@+id/hero_status"

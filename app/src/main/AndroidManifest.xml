@@ -31,6 +31,12 @@
         android:name="android.hardware.wifi"
         android:required="false" />
 
+    <!-- Shizuku (optional grant path without ADB) - package visibility on API 30+ -->
+    <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+        <provider android:authorities="rikka.shizuku.provider" />
+    </queries>
+
     <application
         android:name=".NetPilotApp"
         android:allowBackup="false"
@@ -58,6 +64,15 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Shizuku provider bridge (only used when the user opts in via Shizuku) -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <activity
             android:name=".ui.licenses.LicensesActivity"

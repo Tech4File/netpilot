@@ -29,6 +29,7 @@ class NetPilotVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        isRunning = true
         when (intent?.action) {
             ACTION_DISCONNECT -> {
                 teardown()
@@ -138,12 +139,18 @@ class NetPilotVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         teardown()
         super.onDestroy()
     }
 
     companion object {
         const val ACTION_CONNECT = "app.netpilot.action.CONNECT"
+
+        /** Reflects whether NetPilot's own VPN tunnel service is alive in this process. */
+        @Volatile
+        var isRunning: Boolean = false
+            private set
         const val ACTION_DISCONNECT = "app.netpilot.action.DISCONNECT"
         const val EXTRA_OVPN = "app.netpilot.extra.OVPN_CONFIG"
         const val EXTRA_SESSION = "app.netpilot.extra.SESSION"

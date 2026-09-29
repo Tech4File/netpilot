@@ -1,8 +1,11 @@
 package app.netpilot.ui.dialogs
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.Gravity
@@ -14,7 +17,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import app.netpilot.R
 import app.netpilot.core.dns.PrivateDnsManager
+import app.netpilot.core.shizuku.ShizukuGranter
 import com.google.android.material.button.MaterialButton
+import rikka.shizuku.Shizuku
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /** The one-time WRITE_SECURE_SETTINGS onboarding flow (copy-paste ADB steps). */
@@ -22,6 +27,9 @@ object SetupDialogs {
 
     const val GRANT_COMMAND =
         "adb shell pm grant app.netpilot android.permission.WRITE_SECURE_SETTINGS"
+    const val REPO_URL = "https://github.com/Tech4File/netpilot"
+    const val ISSUES_URL = "$REPO_URL/issues"
+    private const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
 
     fun showPermissionGuide(activity: AppCompatActivity, onGranted: () -> Unit = {}) {
         val context = activity
@@ -46,7 +54,82 @@ object SetupDialogs {
         }
 
         body(R.string.setup_intro, 0)
-        body(R.string.setup_step1, 12)
+
+        // Easiest path first: Shizuku (no PC). Not installed -> Play Store
+        // page; installed -> direct grant flow. ADB steps remain right below.
+        val shizukuInstalled = ShizukuGranter.installed(context)
+        val shizukuLabel = if (shizukuInstalled) R.string.setup_shizuku_btn else R.string.setup_shizuku_install
+        val shizuku = MaterialButton(context).apply {
+            setText(shizukuLabel)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(12) }
+        }
+        var permissionListener: Shizuku.OnRequestPermissionResultListener? = null
+
+        fun openUrl(url: String) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            } catch (_: ActivityNotFoundException) {
+            }
+        }
+        fun openStore() {
+            val market = "market://details?id=$SHIZUKU_PACKAGE"
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(market)))
+            } catch (_: ActivityNotFoundException) {
+                openUrl("https://play.google.com/store/apps/details?id=$SHIZUKU_PACKAGE")
+            }
+        }
+        fun showTroubleshooting(retry: () -> Unit) {
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.setup_shizuku_trouble_title)
+                .setMessage(R.string.setup_shizuku_causes)
+                .setPositiveButton(R.string.setup_retry) { _, _ -> retry() }
+                .setNeutralButton(R.string.setup_report_issue) { _, _ -> openUrl(ISSUES_URL) }
+                .setNegativeButton(R.string.action_cancel, null)
+                .show()
+        }
+        fun grantNow(retry: () -> Unit) {
+            ShizukuGranter.grantWriteSecureSettings(context) { ok ->
+                if (ok) {
+                    Toast.makeText(context, R.string.setup_shizuku_ok, Toast.LENGTH_LONG).show()
+                    onGranted()
+                } else {
+                    showTroubleshooting(retry)
+                }
+            }
+        }
+        fun startShizukuGrant() {
+            if (!ShizukuGranter.installed(context)) {
+                openStore()
+                return
+            }
+            if (!ShizukuGranter.serverAvailable()) {
+                Toast.makeText(context, R.string.setup_shizuku_missing, Toast.LENGTH_LONG).show()
+                return
+            }
+            if (ShizukuGranter.permissionGranted()) {
+                grantNow(::startShizukuGrant)
+                return
+            }
+            permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+                if (requestCode != 4242) return@OnRequestPermissionResultListener
+                ShizukuGranter.removePermissionListener(permissionListener!!)
+                permissionListener = null
+                if (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(context, R.string.setup_shizuku_wait, Toast.LENGTH_SHORT).show()
+                    grantNow(::startShizukuGrant)
+                } else {
+                    showTroubleshooting(::startShizukuGrant)
+                }
+            }
+            ShizukuGranter.addPermissionListener(permissionListener!!)
+            ShizukuGranter.requestPermission()
+        }
+        shizuku.setOnClickListener { startShizukuGrant() }
+        box.addView(shizuku)
+        body(R.string.setup_step1, 16)
         body(R.string.setup_step2, 8)
         body(R.string.setup_step3, 8)
 
@@ -97,10 +180,24 @@ object SetupDialogs {
         }
         box.addView(verify)
 
+        val link = MaterialButton(context).apply {
+            setText(R.string.setup_project_link)
+            setTextColor(ContextCompat.getColor(context, R.color.brand_primary))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(8) }
+            setOnClickListener { openUrl(REPO_URL) }
+        }
+        box.addView(link)
+
         MaterialAlertDialogBuilder(context)
             .setTitle(R.string.setup_title)
             .setView(scroll)
             .setPositiveButton(R.string.action_done, null)
+            .setOnDismissListener {
+                permissionListener?.let { ShizukuGranter.removePermissionListener(it) }
+                permissionListener = null
+            }
             .show()
     }
 }

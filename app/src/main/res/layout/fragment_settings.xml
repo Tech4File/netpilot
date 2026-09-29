@@ -22,6 +22,16 @@
             android:text="@string/settings_title"
             style="@style/TextAppearance.NetPilot.Title" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_16"
+            android:layout_marginBottom="@dimen/space_4"
+            android:text="@string/settings_section_general"
+            android:textAllCaps="true"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary" />
         <app.netpilot.ui.components.SettingRow
             android:id="@+id/row_theme"
             android:layout_width="match_parent"
@@ -29,6 +39,16 @@
             app:npIcon="@drawable/ic_palette"
             app:npTitle="@string/row_theme" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_16"
+            android:layout_marginBottom="@dimen/space_4"
+            android:text="@string/settings_section_security"
+            android:textAllCaps="true"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary" />
         <app.netpilot.ui.components.SettingRow
             android:id="@+id/row_security"
             android:layout_width="match_parent"
@@ -36,6 +56,16 @@
             app:npIcon="@drawable/ic_verified"
             app:npTitle="@string/row_security" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_16"
+            android:layout_marginBottom="@dimen/space_4"
+            android:text="@string/settings_section_profiles"
+            android:textAllCaps="true"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary" />
         <app.netpilot.ui.components.SettingRow
             android:id="@+id/row_export"
             android:layout_width="match_parent"
@@ -50,6 +80,16 @@
             app:npIcon="@drawable/ic_import"
             app:npTitle="@string/row_import" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_16"
+            android:layout_marginBottom="@dimen/space_4"
+            android:text="@string/settings_section_about"
+            android:textAllCaps="true"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary" />
         <app.netpilot.ui.components.SettingRow
             android:id="@+id/row_privacy"
             android:layout_width="match_parent"

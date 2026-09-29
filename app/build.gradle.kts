@@ -30,8 +30,8 @@ android {
         // versionName below is NEW (no matching vX.Y.Z tag exists yet). No bump
         // => the Release run checks and skips gracefully. versionCode must +1
         // with every release so signed APKs install over the previous ones.
-        versionCode = 9
-        versionName = "1.1.7"
+        versionCode = 10
+        versionName = "2.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en")
@@ -93,6 +93,7 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+        aidl = true // Shizuku user-service interface (no-PC permission grant)
     }
 
     testOptions {
@@ -118,6 +119,8 @@ android {
 }
 
 dependencies {
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     // ---- Runtime: first-party Android only --------------------------------
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

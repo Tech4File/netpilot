@@ -24,6 +24,11 @@ class AppPreferences(context: Context) {
         get() = ThemeMode.from(prefs.getString(KEY_THEME, null))
         set(value) = prefs.edit().putString(KEY_THEME, value.name).apply()
 
+    /** True once the first-launch permission guide was auto-shown (never auto again). */
+    var setupGuideShown: Boolean
+        get() = prefs.getBoolean(KEY_SETUP_GUIDE_SHOWN, false)
+        set(value) = prefs.edit().putBoolean(KEY_SETUP_GUIDE_SHOWN, value).apply()
+
     var dnsVpnAdvisoryDismissed: Boolean
         get() = prefs.getBoolean(KEY_ADVISORY_DISMISSED, false)
         set(value) = prefs.edit().putBoolean(KEY_ADVISORY_DISMISSED, value).apply()
@@ -32,5 +37,6 @@ class AppPreferences(context: Context) {
         private const val PREFS = "netpilot_settings"
         const val KEY_THEME = "theme"
         const val KEY_ADVISORY_DISMISSED = "dns_vpn_advisory_dismissed"
+        const val KEY_SETUP_GUIDE_SHOWN = "setup_guide_shown"
     }
 }

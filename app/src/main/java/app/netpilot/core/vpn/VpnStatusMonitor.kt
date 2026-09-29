@@ -46,6 +46,20 @@ object VpnStatusMonitor {
         }
     }
 
+    /**
+     * True only when a VPN transport is present AND it belongs to NetPilot.
+     * Device farms and other apps can run their own VPN; reporting any VPN as
+     * "ours" made the dashboard show ON with nothing to turn off (LambdaTest
+     * finding). Our services live in this process, so their static flags are
+     * authoritative for our own tunnels.
+     */
+    fun ourVpnActive(context: Context): Boolean =
+        isActive(context) && (NetPilotVpnService.isRunning || SecureDnsVpnService.runningHostname != null)
+
+    /** A VPN is up, but it is another app's (or the device farm's). */
+    fun foreignVpnActive(context: Context): Boolean =
+        isActive(context) && !ourVpnActive(context)
+
     fun isActive(context: Context): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
         return cm.allNetworks.any { n ->
