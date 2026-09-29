@@ -3,17 +3,20 @@ name: Signing setup (one-time)
 # One-click signing bootstrap — NO personal computer needed.
 #
 # Run this ONCE: Actions -> "Signing setup (one-time)" -> Run workflow.
-# It generates a release keystore + a strong random password on GitHub's
-# runner and writes all four secrets into the repository automatically:
-#   ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD /
-#   ANDROID_KEY_ALIAS    / ANDROID_KEY_PASSWORD
-# After it finishes, every Release run is SIGNED — nothing else to do.
+# Generates a release keystore + a strong random password and writes the four
+# secrets (ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS
+# / ANDROID_KEY_PASSWORD) into the repository.
 #
-# A backup artifact (netpilot-release-keystore-BACKUP) is uploaded for you
-# to download once and store safely, then let it expire (7 days).
-# Why the backup matters: if this repository is ever deleted, its secrets
-# die with it — and the keystore is the only way to ship updates that
-# install over the already-released builds.
+# Robust against org restrictions: some organization policies refuse secret
+# writes from the default GITHUB_TOKEN. If automatic writing is refused, the
+# run still succeeds and attaches a *manual-install* artifact with the exact
+# values and click-path (values are masked in all logs) — plus, at the end,
+# it verifies whether signing is active and tells you precisely what to do.
+#
+# A backup artifact (netpilot-release-keystore-BACKUP) is uploaded for you to
+# download once and store safely. Why it matters: if this repository is ever
+# deleted, its secrets die with it — the keystore is the only way to ship
+# updates that install over the already-released builds.
 
 on:
   workflow_dispatch:
@@ -25,7 +28,7 @@ on:
         type: boolean
 
 permissions:
-  actions: write # write repository secrets via the API
+  actions: write
   contents: read
 
 jobs:
@@ -66,73 +69,132 @@ jobs:
             -storepass "$PASS" \
             -dname "CN=NetPilot, OU=Home, O=Tech4File, L=Warangal, ST=Telangana, C=IN" \
             2>&1 | tail -1
-          echo "keystore generated (password masked; stored only in secrets)"
+          echo "keystore generated (password masked; never printed in logs)"
 
-      - name: Write the 4 secrets into this repository (automated)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PASS_FILE: /tmp/keystore.pass
+      - name: Prepare API fallback writer
         run: |
-          set -e
-          python3 -m pip install --quiet --user pynacl 2>/dev/null || \
-            python3 -m pip install --quiet --user --break-system-packages pynacl
-          python3 - <<'PY'
-          import base64, json, os
+          cat > /tmp/secret_writer.py <<'PY'
+          import base64, json, os, sys
           from urllib import request
-          from nacl import encoding, public
-          from nacl.public import SealedBox
-
-          repo = os.environ["GITHUB_REPOSITORY"]
-          tok  = os.environ["GH_TOKEN"]
-          API  = "https://api.github.com"
-
+          repo, name, value = os.environ["GITHUB_REPOSITORY"], sys.argv[1], sys.argv[2]
+          tok = os.environ["GH_TOKEN"]
           def api(url, data=None, method="GET"):
               body = None if data is None else json.dumps(data).encode()
-              req = request.Request(API + url, data=body, method=method, headers={
-                  "Authorization": f"Bearer {tok}",
-                  "Accept": "application/vnd.github+json",
-                  "Content-Type": "application/json",
-                  "User-Agent": "netpilot-signing-setup",
-              })
+              req = request.Request("https://api.github.com" + url, data=body, method=method,
+                  headers={"Authorization": "Bearer " + tok, "Accept": "application/vnd.github+json",
+                           "Content-Type": "application/json", "User-Agent": "netpilot-signing-setup"})
               with request.urlopen(req) as r:
                   payload = r.read()
               return json.loads(payload) if payload else {}
-
-          pk  = api(f"/repos/{repo}/actions/secrets/public-key")
+          from nacl import encoding, public
+          from nacl.public import SealedBox
+          pk = api("/repos/" + repo + "/actions/secrets/public-key")
           box = SealedBox(public.PublicKey(pk["key"].encode(), encoding.Base64Encoder()))
-
-          def put_secret(name, raw):
-              enc = box.encrypt(raw.encode())
-              api(f"/repos/{repo}/actions/secrets/{name}",
-                  {"encrypted_value": base64.b64encode(enc).decode(), "key_id": pk["key_id"]},
-                  method="PUT")
-              print(f"  secret {name}: written")
-
-          b64 = base64.b64encode(open("netpilot-release.jks", "rb").read()).decode()
-          pw  = open(os.environ["PASS_FILE"]).read().strip()
-          put_secret("ANDROID_KEYSTORE_B64", b64)
-          put_secret("ANDROID_KEYSTORE_PASSWORD", pw)
-          put_secret("ANDROID_KEY_ALIAS", "netpilot")
-          put_secret("ANDROID_KEY_PASSWORD", pw)
-          print("ALL 4 SIGNING SECRETS CONFIGURED")
+          enc = box.encrypt(value.encode())
+          api("/repos/" + repo + "/actions/secrets/" + name,
+              {"encrypted_value": base64.b64encode(enc).decode(), "key_id": pk["key_id"]}, method="PUT")
           PY
-          shred -u /tmp/keystore.pass 2>/dev/null || rm -f /tmp/keystore.pass
+          python3 -m pip install --quiet --user pynacl > /dev/null 2>&1 ||             python3 -m pip install --quiet --user --break-system-packages pynacl > /dev/null 2>&1 || true
+          python3 -c "import nacl" 2>/dev/null && echo "fallback writer ready" || echo "fallback writer unavailable (manual mode will cover)"
 
-      - name: Backup artifact — download once, store safely, then delete it
+      - name: Write the 4 secrets (gh CLI, API fallback, manual fail-safe)
+        id: secrets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          PASS="$(cat /tmp/keystore.pass)"
+          B64="$(base64 -w0 netpilot-release.jks)"
+          echo "::add-mask::$PASS"
+          echo "::add-mask::$B64"
+
+          write_one() {
+            local name="$1" value="$2"
+            if gh secret set "$name" -R "$GITHUB_REPOSITORY" --body "$value" 2>/tmp/gh.err; then
+              echo "  OK $name written (gh)"
+              return 0
+            fi
+            echo "  gh refused ($name): $(head -c 200 /tmp/gh.err)" >&2
+            if python3 /tmp/secret_writer.py "$name" "$value" 2>/tmp/api.err; then
+              echo "  OK $name written (api fallback)"
+              return 0
+            fi
+            echo "  api fallback refused ($name): $(head -c 200 /tmp/api.err)" >&2
+            return 1
+          }
+
+          MANUAL=0
+          write_one ANDROID_KEYSTORE_B64 "$B64"       || MANUAL=1
+          write_one ANDROID_KEYSTORE_PASSWORD "$PASS" || MANUAL=1
+          write_one ANDROID_KEY_ALIAS "netpilot"      || MANUAL=1
+          write_one ANDROID_KEY_PASSWORD "$PASS"      || MANUAL=1
+
+          if [ "$MANUAL" = "1" ]; then
+            mkdir -p manual-install
+            {
+              echo "NetPilot signing secrets - MANUAL INSTALL"
+              echo "=========================================="
+              echo "GitHub refused automatic secret writing for this repository"
+              echo "(common for organizations: the default GITHUB_TOKEN may not write"
+              echo "repository secrets). Add these 4 secrets by hand:"
+              echo "Repo -> Settings -> Secrets and variables -> Actions ->"
+              echo "'New repository secret' - one entry per line below (Name = value):"
+              echo
+              echo "ANDROID_KEYSTORE_B64=$B64"
+              echo "ANDROID_KEYSTORE_PASSWORD=$PASS"
+              echo "ANDROID_KEY_ALIAS=netpilot"
+              echo "ANDROID_KEY_PASSWORD=$PASS"
+            } > manual-install/SECRETS-TO-ADD.txt
+            echo "mode=manual" >> "$GITHUB_OUTPUT"
+            echo "::notice::Automatic secret write was refused by GitHub. Download the 'netpilot-release-keystore-BACKUP' artifact and follow manual-install/SECRETS-TO-ADD.txt (2 minutes). Values are masked in all logs."
+          else
+            echo "mode=auto" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Backup artifacts — download, store safely, then delete them
         uses: actions/upload-artifact@v4
         with:
           name: netpilot-release-keystore-BACKUP
-          path: netpilot-release.jks
+          path: |
+            netpilot-release.jks
+            manual-install/SECRETS-TO-ADD.txt
           retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Verify signing is now active
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          if gh secret list -R "$GITHUB_REPOSITORY" 2>/dev/null | grep -q "ANDROID_KEYSTORE_B64"; then
+            echo "active=true" >> "$GITHUB_OUTPUT"
+            echo "✅ ANDROID_KEYSTORE_B64 is present in repository secrets"
+          else
+            echo "active=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Summary
         run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## ✅ Signing is configured
-          1. Download the **netpilot-release-keystore-BACKUP** artifact (runs list → this run → Artifacts) and store it safely (USB + private cloud). Then delete the artifact.
-          2. Now open **Actions → Release → Run workflow → auto-patch → Run**.
-          3. The release will be **SIGNED** — the release page flips from "⚠️ UNSIGNED" to "✅ Signed release build".
-
-          *The password was generated randomly, is masked in all logs, and lives only in the repository secrets. You never need to type it.*
-          EOF
+          ACTIVE="${{ steps.verify.outputs.active }}"
+          MODE="${{ steps.secrets.outputs.mode }}"
+          {
+            if [ "$ACTIVE" = "true" ]; then
+              echo "## ✅ Signing is configured"
+              echo "1. Download **netpilot-release-keystore-BACKUP** (runs list → this run → Artifacts), store it safely (USB + private cloud), then delete the artifact."
+              echo "2. Go to **Actions → Release → Run workflow → auto-patch → Run** — the release will be **SIGNED** (label flips to '✅ Signed release build')."
+            else
+              echo "## ⚠️ Keystore generated — 4 secrets need a 2-minute manual add"
+              echo "GitHub refused automatic secret writing for this repository (organization policy on the default GITHUB_TOKEN)."
+              echo
+              echo "**Unblock in 2 minutes:**"
+              echo "1. Download the **netpilot-release-keystore-BACKUP** artifact and open \`manual-install/SECRETS-TO-ADD.txt\`."
+              echo "2. Repo → Settings → Secrets and variables → Actions → **New repository secret** — add the 4 Name/Value pairs from that file."
+              echo "3. Re-run **Release** (auto-patch) — it becomes **✅ Signed** automatically."
+              echo
+              echo "**Permanent fix (recommended):** Org → **Settings → Actions → General → Workflow permissions** → allow *Read and write* — then re-run this workflow once; future runs write secrets automatically."
+            fi
+            echo
+            echo "*The password was generated randomly, is masked in every log, and never needs to be known by you.*"
+          } >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
