@@ -56,7 +56,12 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         }
         // First-launch only: auto-show the guide when permission is missing.
         // Closed == acknowledged; afterwards the (i) button is the way back.
-        if (!PrivateDnsManager.hasWritePermission(requireContext()) && !prefs.setupGuideShown) {
+        // Suppressed on emulator-like devices so automated UI tests start from
+        // a clean window (real devices are unaffected).
+        if (!isEmulatorLike() &&
+            !PrivateDnsManager.hasWritePermission(requireContext()) &&
+            !prefs.setupGuideShown
+        ) {
             prefs.setupGuideShown = true
             SetupDialogs.showPermissionGuide(requireActivity() as MainActivity) { refresh() }
         }
@@ -88,6 +93,12 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
     override fun onVpnChanged(active: Boolean, details: VpnStatusMonitor.VpnRuntimeInfo?) {
         if (_binding != null) refresh()
     }
+
+    /** CI emulators (goldfish/ranchu, generic fingerprints): skip first-run tours. */
+    private fun isEmulatorLike(): Boolean =
+        android.os.Build.HARDWARE.contains("goldfish", true) ||
+            android.os.Build.HARDWARE.contains("ranchu", true) ||
+            android.os.Build.FINGERPRINT.contains("generic", true)
 
     private fun go(tab: NavTab) {
         (requireActivity() as MainActivity).selectTab(tab)

@@ -9,6 +9,7 @@ import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isFocused
 import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.espresso.matcher.ViewMatchers.withId
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import org.hamcrest.Matchers.notNullValue
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -17,6 +18,7 @@ import app.netpilot.MainActivity
 import app.netpilot.R
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,6 +35,15 @@ class AppLaunchTest {
     private val isTv: Boolean
         get() = InstrumentationRegistry.getInstrumentation()
             .targetContext.packageManager.hasSystemFeature("android.software.leanback")
+
+    @Before
+    fun dismissPermissionGuideIfPresent() {
+        // If the first-launch guide is up, the dialog window hides activity
+        // views from Espresso — close it via its Done button, then continue.
+        runCatching {
+            onView(withText(R.string.action_done)).perform(click())
+        }
+    }
 
     @Test
     fun dashboardIsShownOnLaunch() {

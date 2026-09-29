@@ -67,10 +67,45 @@ jobs:
       - name: All tests must pass before any release build
         run: ./gradlew --stacktrace :app:testDebugUnitTest :app:lintDebug
 
+  instrumented-gate:
+    name: Instrumented gate (API 29, ungranted)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Ensure gradlew is executable
+        run: chmod +x gradlew
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb_hid_key
+          key: avd-29-api
+      - name: Run instrumented tests on one representative emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          script: ./.github/scripts/run-instrumented-tests.sh
+        env:
+          GRANT_SECURE_SETTINGS: "false"
+
   release:
     name: Build & publish release
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [verify, instrumented-gate]
     steps:
       - uses: actions/checkout@v4
         with:
