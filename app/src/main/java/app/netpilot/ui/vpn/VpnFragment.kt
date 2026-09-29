@@ -254,7 +254,10 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         val dialogBinding = DialogVpnProfileBinding.inflate(layoutInflater)
         val segment = dialogBinding.vpnTypeSegment
 
+        val initialType = existing?.type ?: VpnType.PLATFORM_IKEV2
+        var currentType = initialType
         fun renderFields(type: VpnType) {
+            currentType = type
             dialogBinding.tilPort.visibility =
                 if (type == VpnType.OPENVPN) View.VISIBLE else View.GONE
             dialogBinding.btnImportOvpn.visibility = View.VISIBLE
@@ -269,7 +272,6 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             )
         }
 
-        val initialType = existing?.type ?: VpnType.PLATFORM_IKEV2
         segment.configure(
             items = listOf(getString(R.string.vpn_type_ikev2), getString(R.string.vpn_type_openvpn)),
             initialIndex = if (initialType == VpnType.PLATFORM_IKEV2) 0 else 1,
@@ -297,14 +299,13 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
 
         dialogBinding.btnImportOvpn.setOnClickListener {
             activeVpnDialogBinding = dialogBinding
-            importIsOpenVpn = segment.selectedIndex == 1
-            ovpnPicker.launch(
-                if (importIsOpenVpn) {
-                    arrayOf("application/openvpn-profile", "application/x-openvpn-profile", "text/plain", "application/octet-stream")
-                } else {
-                    arrayOf("application/x-x509-ca-cert", "application/pem-certificate-chain", "text/plain", "application/octet-stream")
-                },
-            )
+            // Two dedicated launchers below — the callback always knows what it
+            // is handling, so a stale toggle index can never cross the streams.
+            if (currentType == VpnType.OPENVPN) {
+                ovpnPicker.launch(arrayOf("*/*"))
+            } else {
+                caPicker.launch(arrayOf("*/*"))
+            }
         }
 
         MaterialAlertDialogBuilder(requireContext())
@@ -343,16 +344,6 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
                 toast(getString(R.string.import_err))
                 return@registerForActivityResult
             }
-            if (!importIsOpenVpn) {
-                val pem = app.netpilot.core.vpn.CaCertParser.normalizeToPem(bytes)
-                if (pem == null) {
-                    toast(getString(R.string.err_ca_invalid))
-                } else {
-                    lastImportedCaPem = pem
-                    toast(getString(R.string.ca_imported_ok))
-                }
-                return@registerForActivityResult
-            }
             val config = OvpnConfigParser.parse(bytes.toString(Charsets.UTF_8))
             if (config.isUsableForProfile()) {
                 lastImportedConfig = bytes.toString(Charsets.UTF_8)
@@ -366,7 +357,27 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             } else {
                 lastImportedConfig = null
                 lastImportedSummary = null
-                toast(getString(R.string.err_no_ovpn))
+                toast(getString(R.string.err_ovpn_unusable))
+            }
+        }
+
+    private val caPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            val dialogBinding = activeVpnDialogBinding
+            if (uri == null || dialogBinding == null) return@registerForActivityResult
+            val bytes = runCatching {
+                requireContext().contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }.getOrNull()
+            if (bytes == null) {
+                toast(getString(R.string.import_err))
+                return@registerForActivityResult
+            }
+            val pem = app.netpilot.core.vpn.CaCertParser.normalizeToPem(bytes)
+            if (pem == null) {
+                toast(getString(R.string.err_ca_invalid))
+            } else {
+                lastImportedCaPem = pem
+                toast(getString(R.string.ca_imported_ok))
             }
         }
 
@@ -374,7 +385,6 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     private var lastImportedConfig: String? = null
     private var lastImportedSummary: String? = null
     private var lastImportedCaPem: String? = null
-    private var importIsOpenVpn: Boolean = true
 
     private fun saveProfile(
         dialogBinding: DialogVpnProfileBinding,
@@ -409,7 +419,9 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         } else dialogBinding.tilPort.error = null
 
         if (type == VpnType.OPENVPN && importedConfig.isNullOrBlank() && (editing?.ovpnConfig).isNullOrBlank()) {
-            dialogBinding.tilServer.error = getString(R.string.err_no_ovpn)
+            // OpenVPN profiles carry their full tunnel config; manual fields alone
+            // cannot produce one (and this build ships no engine module).
+            dialogBinding.tilServer.error = getString(R.string.err_openvpn_needs_config)
             valid = false
         }
 

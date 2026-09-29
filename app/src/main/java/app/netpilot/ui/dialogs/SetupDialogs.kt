@@ -167,7 +167,6 @@ object SetupDialogs {
 
         val verify = MaterialButton(context).apply {
             setText(R.string.setup_verify)
-            setTextColor(ContextCompat.getColor(context, R.color.brand_primary))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = dp(8) }
@@ -184,7 +183,6 @@ object SetupDialogs {
 
         val link = MaterialButton(context).apply {
             setText(R.string.setup_project_link)
-            setTextColor(ContextCompat.getColor(context, R.color.brand_primary))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = dp(8) }
