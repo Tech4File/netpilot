@@ -26,8 +26,12 @@ android {
         // Android 9 (Pie) — the release that introduced system-wide Private DNS.
         minSdk = 28
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.1.3"
+        // RELEASE RULE: a push to main auto-publishes a GitHub Release whenever
+        // versionName below is NEW (no matching vX.Y.Z tag exists yet). No bump
+        // => the Release run checks and skips gracefully. versionCode must +1
+        // with every release so signed APKs install over the previous ones.
+        versionCode = 6
+        versionName = "1.1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en")
