@@ -113,18 +113,20 @@ object SetupDialogs {
                 grantNow(::startShizukuGrant)
                 return
             }
-            permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-                if (requestCode != 4242) return@OnRequestPermissionResultListener
-                ShizukuGranter.removePermissionListener(permissionListener!!)
-                permissionListener = null
-                if (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    Toast.makeText(context, R.string.setup_shizuku_wait, Toast.LENGTH_SHORT).show()
-                    grantNow(::startShizukuGrant)
-                } else {
-                    showTroubleshooting(::startShizukuGrant)
+            val listener = object : Shizuku.OnRequestPermissionResultListener {
+                override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
+                    if (requestCode != 4242) return
+                    ShizukuGranter.removePermissionListener(this)
+                    if (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        Toast.makeText(context, R.string.setup_shizuku_wait, Toast.LENGTH_SHORT).show()
+                        grantNow(::startShizukuGrant)
+                    } else {
+                        showTroubleshooting(::startShizukuGrant)
+                    }
                 }
             }
-            ShizukuGranter.addPermissionListener(permissionListener!!)
+            permissionListener = listener
+            ShizukuGranter.addPermissionListener(listener)
             ShizukuGranter.requestPermission()
         }
         shizuku.setOnClickListener { startShizukuGrant() }

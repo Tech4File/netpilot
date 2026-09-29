@@ -72,8 +72,9 @@ object OvpnConfigParser {
             val openTag = BLOCK_OPEN.find(line)
             val closeTag = BLOCK_CLOSE.find(line)
             if (openTag != null) {
-                currentBlock = openTag.groupValues[1].lowercase()
-                blocks[currentBlock!!] = 0
+                val block = openTag.groupValues[1].lowercase()
+                currentBlock = block
+                blocks[block] = 0
                 return@forEach
             }
             if (closeTag != null) {
@@ -81,7 +82,8 @@ object OvpnConfigParser {
                 return@forEach
             }
             if (currentBlock != null) {
-                blocks[currentBlock!!] = (blocks[currentBlock!!] ?: 0) + line.length
+                val block = currentBlock
+                blocks[block] = (blocks[block] ?: 0) + line.length
                 return@forEach
             }
 
