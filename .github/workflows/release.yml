@@ -37,6 +37,7 @@ on:
 
 permissions:
   contents: write
+  actions: write # secret-name diagnostics (never values)
 
 jobs:
   verify:
@@ -184,7 +185,11 @@ jobs:
             echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/.ci-release-keystore.jks"
           else
             echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Signing secrets not set — the release will be published UNSIGNED (labelled as such). Run the 'Signing setup (one-time)' workflow to enable signing."
+            echo "::warning::Signing secrets not visible to this run — the release will be published UNSIGNED (labelled as such)."
+            echo "Secret names visible to this repo right now:"
+            gh secret list -R "$GITHUB_REPOSITORY" 2>/dev/null | sed 's/^/  /' || echo "  (could not list)"
+            echo "Expected exactly: ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD"
+            echo "If some appear here but detection missed them, check they are REPOSITORY secrets (not environment/organization) with those exact names."
           fi
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
@@ -194,6 +199,11 @@ jobs:
 
       - name: Build release APK + AAB
         if: steps.dup.outputs.already_released == 'false'
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease :app:bundleRelease
 
       - name: Generate checksums
@@ -202,6 +212,23 @@ jobs:
           cd app/build/outputs
           find apk -name "*.apk" -exec sha256sum {} \; | tee checksums-sha256.txt
           find bundle -name "*.aab" -exec sha256sum {} \; >> checksums-sha256.txt || true
+
+      - name: Stage release files with product names
+        if: steps.dup.outputs.already_released == 'false'
+        run: |
+          set -e
+          VERSION="${{ steps.ver.outputs.version }}"
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          if echo "$APK" | grep -q "unsigned"; then
+            cp "$APK" "NetPilot-v${VERSION}-unsigned.apk"
+            echo "staged NetPilot-v${VERSION}-unsigned.apk (signing was not active)"
+          else
+            cp "$APK" "NetPilot-v${VERSION}.apk"
+            echo "staged NetPilot-v${VERSION}.apk (signed)"
+          fi
+          AAB=$(ls app/build/outputs/bundle/release/*.aab | head -1)
+          cp "$AAB" "NetPilot-v${VERSION}.aab"
+          echo "staged NetPilot-v${VERSION}.aab"
 
       - name: Package source zip
         if: steps.dup.outputs.already_released == 'false'
@@ -230,6 +257,18 @@ jobs:
             ```
             3. Open NetPilot → PRIVATE DNS → add a provider hostname → activate.
 
+            ### Runs everywhere — one universal APK
+            | Device type | Covered |
+            |---|---|
+            | Android TV / Google TV (D-pad, banner, leanback launcher) | ✅ |
+            | Phones & tablets (responsive layouts, Light/Dark) | ✅ |
+            | CPU architectures: arm64-v8a, armeabi-v7a, x86, x86_64 | ✅ all in this one APK |
+
+            NetPilot contains **zero native code**, so this single APK runs on every
+            architecture and every Android 9+ device — nothing to pick or match.
+            (`NetPilot-v*.aab` is the Play-Store bundle; Play generates optimized
+            per-device downloads from it automatically.)
+
             ### Updating
             Installs directly **over any previous signed NetPilot release** — your
             profiles and settings are kept (versionCode always increases).
@@ -241,8 +280,8 @@ jobs:
             Built automatically by the Release workflow from verified source (all tests green).
 
           files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
+            NetPilot-v*.apk
+            NetPilot-v*.aab
             app/build/outputs/checksums-sha256.txt
             NetPilot-v*-source.zip
 
