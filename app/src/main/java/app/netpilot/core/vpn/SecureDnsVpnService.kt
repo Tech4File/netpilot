@@ -1,20 +1,15 @@
 package app.netpilot.core.vpn
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import app.netpilot.MainActivity
 import app.netpilot.R
 import app.netpilot.core.dns.DnsMessage
 import app.netpilot.core.dns.DotClient
+import app.netpilot.core.status.StatusNotifications
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.InetAddress
@@ -156,39 +151,16 @@ class SecureDnsVpnService : VpnService() {
     }
 
     private fun goForeground(provider: String) {
-        ensureChannel()
-        val contentIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_logo_shield)
-            .setContentTitle(getString(R.string.secure_dns_session))
-            .setContentText(getString(R.string.secure_dns_notification, provider))
-            .setContentIntent(contentIntent)
-            .setOngoing(true)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .build()
+        // The unified status notification: shows this tunnel plus any strict
+        // system Private DNS line, with one Turn-off action.
+        val notification = StatusNotifications.secureDnsServiceNotification(this)
         val type = if (Build.VERSION.SDK_INT >= 34) {
             @Suppress("InlinedApi")
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         } else {
             0
         }
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
-    }
-
-    private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(
-                NotificationChannel(
-                    CHANNEL_ID,
-                    getString(R.string.secure_dns_session),
-                    NotificationManager.IMPORTANCE_LOW,
-                ),
-            )
-        }
+        ServiceCompat.startForeground(this, StatusNotifications.NOTIF_ID_SECURE_DNS, notification, type)
     }
 
     override fun onDestroy() {

@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import app.netpilot.MainActivity
 import app.netpilot.R
+import app.netpilot.core.status.StatusNotifications
 
 /**
  * VpnService scaffold for OpenVPN profiles.
@@ -45,6 +46,8 @@ class NetPilotVpnService : VpnService() {
     }
 
     private fun handleConnect(intent: Intent) {
+        runningSession = intent.getStringExtra(EXTRA_SESSION)
+        runningProfileId = intent.getStringExtra(EXTRA_PROFILE_ID)
         goForeground()
 
         val raw = intent.getStringExtra(EXTRA_OVPN)
@@ -88,6 +91,8 @@ class NetPilotVpnService : VpnService() {
     }
 
     private fun teardown() {
+        runningSession = null
+        runningProfileId = null
         runCatching { channel?.close() }
         channel = null
         runCatching { tun?.close() }
@@ -97,8 +102,9 @@ class NetPilotVpnService : VpnService() {
     }
 
     private fun goForeground() {
-        ensureChannel()
-        val notification = buildNotification(getString(R.string.app_name))
+        // The unified status notification: active profile name + DNS state +
+        // one Turn-off action (see StatusNotifications).
+        val notification = StatusNotifications.vpnServiceNotification(this)
         // targetSdk 34+ requires a typed FGS; specialUse is declared in the manifest.
         val type = if (Build.VERSION.SDK_INT >= 34) {
             @Suppress("InlinedApi") // constant inlined at compile time, guarded here
@@ -106,7 +112,7 @@ class NetPilotVpnService : VpnService() {
         } else {
             0
         }
-        ServiceCompat.startForeground(this, MAIN_NOTIFICATION_ID, notification, type)
+        ServiceCompat.startForeground(this, StatusNotifications.NOTIF_ID_VPN, notification, type)
     }
 
     private fun buildNotification(text: String): Notification {
@@ -151,9 +157,20 @@ class NetPilotVpnService : VpnService() {
         @Volatile
         var isRunning: Boolean = false
             private set
+
+        /** Session (profile) name of the tunnel this service is carrying, if any. */
+        @Volatile
+        var runningSession: String? = null
+            private set
+
+        /** Profile id of the tunnel this service is carrying, if any. */
+        @Volatile
+        var runningProfileId: String? = null
+            private set
         const val ACTION_DISCONNECT = "app.netpilot.action.DISCONNECT"
         const val EXTRA_OVPN = "app.netpilot.extra.OVPN_CONFIG"
         const val EXTRA_SESSION = "app.netpilot.extra.SESSION"
+        const val EXTRA_PROFILE_ID = "app.netpilot.extra.PROFILE_ID"
 
         private const val CHANNEL_ID = "netpilot_vpn"
         private const val MAIN_NOTIFICATION_ID = 41

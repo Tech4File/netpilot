@@ -38,6 +38,9 @@ object VpnStatusMonitor {
             override fun onAvailable(network: Network) = notify(appContext)
             override fun onLost(network: Network) = notify(appContext)
         }
+        // A platform IKEv2 session can outlive our process; when we come back,
+        // drop the persisted session marker if the device has no VPN at all.
+        VpnSessionState.reconcile(appContext, isActive(appContext))
         try {
             cm.registerNetworkCallback(request, callback)
             registeredContext = appContext
@@ -50,11 +53,24 @@ object VpnStatusMonitor {
      * True only when a VPN transport is present AND it belongs to NetPilot.
      * Device farms and other apps can run their own VPN; reporting any VPN as
      * "ours" made the dashboard show ON with nothing to turn off (LambdaTest
-     * finding). Our services live in this process, so their static flags are
-     * authoritative for our own tunnels.
+     * finding). Our classic services live in this process, so their static
+     * flags are authoritative; the platform IKEv2 path has NO in-process
+     * service (the OS daemon owns the tunnel), so its recorded session in
+     * [VpnSessionState] is the ownership proof (v2.0.3 field bug fix —
+     * NetPilot's own IKEv2 tunnel used to be misclassified as foreign).
      */
     fun ourVpnActive(context: Context): Boolean =
-        isActive(context) && (NetPilotVpnService.isRunning || SecureDnsVpnService.runningHostname != null)
+        isActive(context) && (
+            NetPilotVpnService.isRunning ||
+                SecureDnsVpnService.runningHostname != null ||
+                VpnSessionState.platformSessionActive(context)
+            )
+
+    /**
+     * True when NetPilot has claimed a tunnel even if the TUN is not up yet
+     * (the connecting window) — used for the "Connecting…" UI state.
+     */
+    fun anySessionClaimed(context: Context): Boolean = VpnSessionState.anySessionClaimed(context)
 
     /** A VPN is up, but it is another app's (or the device farm's). */
     fun foreignVpnActive(context: Context): Boolean =

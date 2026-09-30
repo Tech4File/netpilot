@@ -17,11 +17,13 @@ class VpnProfilesAdapter(
 
     private val items = mutableListOf<VpnProfile>()
     private var connectedId: String? = null
+    private var connectingId: String? = null
 
-    fun submit(profiles: List<VpnProfile>, connected: String?) {
+    fun submit(profiles: List<VpnProfile>, connected: String?, connecting: String? = null) {
         items.clear()
         items += profiles
         connectedId = connected
+        connectingId = connecting
         notifyDataSetChanged()
     }
 
@@ -41,13 +43,22 @@ class VpnProfilesAdapter(
             binding.typeBadge.setText(profile.type.labelRes)
             binding.profileHost.text = "${profile.serverHost}:${profile.serverPort}"
             val connected = profile.id == connectedId
+            val connecting = !connected && profile.id == connectingId
             binding.profileState.setText(
-                if (connected) R.string.vpn_status_connected else R.string.vpn_status_disconnected,
+                when {
+                    connected -> R.string.vpn_status_connected
+                    connecting -> R.string.vpn_status_connecting
+                    else -> R.string.vpn_status_disconnected
+                },
             )
             binding.profileState.setTextColor(
                 ContextCompat.getColor(
                     context,
-                    if (connected) R.color.status_success else R.color.on_surface_variant,
+                    when {
+                        connected -> R.color.status_success
+                        connecting -> R.color.status_info
+                        else -> R.color.on_surface_variant
+                    },
                 ),
             )
             binding.profileRoot.setOnClickListener { onRowClick(profile) }

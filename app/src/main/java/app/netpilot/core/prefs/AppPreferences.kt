@@ -33,10 +33,16 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_ADVISORY_DISMISSED, false)
         set(value) = prefs.edit().putBoolean(KEY_ADVISORY_DISMISSED, value).apply()
 
+    /** True once the POST_NOTIFICATIONS runtime request was made (ask once, never nag). */
+    var notificationPermissionAsked: Boolean
+        get() = prefs.getBoolean(KEY_NOTIF_PERMISSION_ASKED, false)
+        set(value) = prefs.edit().putBoolean(KEY_NOTIF_PERMISSION_ASKED, value).apply()
+
     companion object {
         private const val PREFS = "netpilot_settings"
         const val KEY_THEME = "theme"
         const val KEY_ADVISORY_DISMISSED = "dns_vpn_advisory_dismissed"
         const val KEY_SETUP_GUIDE_SHOWN = "setup_guide_shown"
+        private const val KEY_NOTIF_PERMISSION_ASKED = "notification_permission_asked"
     }
 }

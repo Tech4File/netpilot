@@ -1,13 +1,19 @@
 package app.netpilot
 
+import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
+import app.netpilot.core.prefs.AppPreferences
+import app.netpilot.core.status.StatusNotifications
+import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
 import app.netpilot.databinding.ActivityMainBinding
 import app.netpilot.ui.NavTab
@@ -127,9 +133,40 @@ class MainActivity : AppCompatActivity(), NavRailView.Callback {
     override fun onResume() {
         super.onResume()
         VpnStatusMonitor.start(this)
+        val appCtx = applicationContext
+        // A platform IKEv2 tunnel can outlive this process: re-own it (and its
+        // status notification) on return, or drop the stale marker.
+        VpnSessionState.clearIfExpired(appCtx, VpnStatusMonitor.isActive(appCtx))
+        VpnSessionState.reconcile(appCtx, VpnStatusMonitor.isActive(appCtx))
+        StatusNotifications.reconcileStatusService(appCtx)
+        ensureNotificationPermission()
     }
+
+    /** Android 13+ posts the status notification only with POST_NOTIFICATIONS. */
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33) return
+        // CI emulators: never block automated UI runs with a permission dialog
+        // (same guard as the first-run guide).
+        if (isEmulatorLike()) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val prefs = AppPreferences(this)
+        if (prefs.notificationPermissionAsked) return
+        prefs.notificationPermissionAsked = true
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIF_PERMISSION)
+    }
+
+    /** CI emulators (goldfish/ranchu, generic fingerprints): skip runtime prompts. */
+    private fun isEmulatorLike(): Boolean =
+        Build.HARDWARE.contains("goldfish", true) ||
+            Build.HARDWARE.contains("ranchu", true) ||
+            Build.FINGERPRINT.contains("generic", true)
 
     companion object {
         private const val KEY_TAB = "selected_tab"
+        private const val REQUEST_NOTIF_PERMISSION = 1001
     }
 }

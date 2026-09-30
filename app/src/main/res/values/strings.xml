@@ -215,4 +215,18 @@
     <!-- VPN profile import/validation -->
     <string name="err_openvpn_needs_config">OpenVPN profiles need an imported .ovpn config (tap Import above) — or choose IKEv2/IPsec to set up manually</string>
     <string name="err_ovpn_unusable">That file has no usable OpenVPN config (missing remote/client)</string>
+
+    <!-- v2.0.4 — honest connection states + unified status notification -->
+    <string name="vpn_status_connecting">Connecting…</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="protection_sub_connecting">Establishing a secure tunnel…</string>
+    <string name="notif_channel_status">Connection status</string>
+    <string name="notif_vpn_active">VPN active — %1$s</string>
+    <string name="notif_secure_dns_active">Secure DNS active — %1$s</string>
+    <string name="notif_dns_active">Private DNS active — %1$s</string>
+    <string name="notif_both_title">VPN + Private DNS active</string>
+    <string name="notif_both_text">VPN: %1$s · Private DNS: %2$s</string>
+    <string name="notif_both_text_secure">Secure DNS: %1$s · Private DNS: %2$s</string>
+    <string name="notif_action_turn_off">Turn off</string>
+    <string name="notif_turned_off_toast">NetPilot protection turned off</string>
 </resources>

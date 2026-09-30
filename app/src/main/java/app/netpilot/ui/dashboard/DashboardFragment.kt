@@ -14,6 +14,7 @@ import app.netpilot.core.model.DnsMode
 import app.netpilot.core.network.NetworkInfoProvider
 import app.netpilot.core.prefs.AppPreferences
 import app.netpilot.core.vpn.SecureDnsVpnService
+import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
 import app.netpilot.databinding.FragmentDashboardBinding
 import app.netpilot.ui.NavTab
@@ -106,6 +107,9 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
 
     fun refresh() {
         val context = requireContext()
+        // Self-heal an abandoned VPN connect attempt (never show a stuck
+        // "Connecting…" hero for a tunnel that will never appear).
+        VpnSessionState.clearIfExpired(context, VpnStatusMonitor.isActive(context))
         val dns = PrivateDnsManager.read(context)
         val vpnActiveRaw = VpnStatusMonitor.isActive(context)
         val secureDnsOn = SecureDnsVpnService.runningHostname != null
@@ -113,6 +117,8 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         // other apps run VPNs too (LambdaTest finding).
         val systemVpnActive = VpnStatusMonitor.ourVpnActive(context)
         val foreignVpn = vpnActiveRaw && !systemVpnActive
+        val claimed = VpnSessionState.anySessionClaimed(context)
+        val tunnel = VpnSessionState.activeTunnel(context)
         val dnsEncrypting = dns.mode == DnsMode.CUSTOM || secureDnsOn
         val activeProfile = dnsRepo.activeProfile()
         val providerName = activeProfile?.name ?: dns.specifier
@@ -121,6 +127,8 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         val (textRes, subRes, colorRes) = when {
             dnsEncrypting && systemVpnActive ->
                 Triple(R.string.status_protected, R.string.protection_sub_protected, R.color.status_success)
+            claimed && !systemVpnActive ->
+                Triple(R.string.status_connecting, R.string.protection_sub_connecting, R.color.status_info)
             dnsEncrypting ->
                 Triple(R.string.status_dns_only, R.string.protection_sub_dns, R.color.status_info)
             systemVpnActive ->
@@ -144,13 +152,11 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
             secureDnsOn -> getString(R.string.state_on) + " · " + (SecureDnsVpnService.runningHostname ?: "—") + " (VPN)"
             else -> getString(R.string.state_off)
         }
-        binding.vpnQuickState.setText(
-            when {
-                systemVpnActive -> R.string.state_on
-                foreignVpn -> R.string.state_foreign_vpn
-                else -> R.string.state_off
-            },
-        )
+        binding.vpnQuickState.text = when {
+            systemVpnActive -> getString(R.string.state_on) + " · " + (tunnel?.name ?: "—")
+            foreignVpn -> getString(R.string.state_foreign_vpn)
+            else -> getString(R.string.state_off)
+        }
 
         // Setup + advisory cards
         binding.setupCard.visibility =

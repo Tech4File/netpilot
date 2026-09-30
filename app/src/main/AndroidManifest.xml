@@ -106,5 +106,21 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="OpenVPN-compatible tunnel engine transport for user-supplied VPN profiles" />
         </service>
+        <!-- Standalone host of the unified status notification (platform IKEv2 /
+             strict-Private-DNS states have no classic service to host it). -->
+        <service
+            android:name=".core.status.VpnStatusService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <!-- targetSdk 34+ requires a documented use case for specialUse FGS type. -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent status indicator with one-tap turn-off for the user's active VPN and Private DNS protection" />
+        </service>
+
+        <!-- The notification's Turn off action receiver. -->
+        <receiver
+            android:name=".core.status.StatusActionReceiver"
+            android:exported="false" />
     </application>
 </manifest>

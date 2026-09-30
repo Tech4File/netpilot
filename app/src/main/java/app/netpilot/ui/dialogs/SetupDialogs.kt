@@ -15,6 +15,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import app.netpilot.BuildConfig
 import app.netpilot.R
 import app.netpilot.core.dns.PrivateDnsManager
 import app.netpilot.core.shizuku.ShizukuGranter
@@ -25,8 +26,8 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 /** The one-time WRITE_SECURE_SETTINGS onboarding flow (copy-paste ADB steps). */
 object SetupDialogs {
 
-    const val GRANT_COMMAND =
-        "adb shell pm grant app.netpilot android.permission.WRITE_SECURE_SETTINGS"
+    val GRANT_COMMAND: String
+        get() = "adb shell pm grant ${BuildConfig.APPLICATION_ID} android.permission.WRITE_SECURE_SETTINGS"
     const val REPO_URL = "https://github.com/Tech4File/netpilot"
     const val ISSUES_URL = "$REPO_URL/issues"
     private const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
@@ -117,14 +118,21 @@ object SetupDialogs {
                 override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
                     if (requestCode != 4242) return
                     ShizukuGranter.removePermissionListener(this)
-                    if (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                        Toast.makeText(context, R.string.setup_shizuku_wait, Toast.LENGTH_SHORT).show()
-                        grantNow(::startShizukuGrant)
-                    } else {
-                        showTroubleshooting(::startShizukuGrant)
+                    // This callback arrives on a binder thread — toasts and
+                    // dialogs must only be touched on the main looper.
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        if (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            Toast.makeText(context, R.string.setup_shizuku_wait, Toast.LENGTH_SHORT).show()
+                            grantNow(::startShizukuGrant)
+                        } else {
+                            showTroubleshooting(::startShizukuGrant)
+                        }
                     }
                 }
             }
+            // A backed-out prompt leaves the previous listener attached;
+            // replace it so a late result can never fire the flow twice.
+            permissionListener?.let { ShizukuGranter.removePermissionListener(it) }
             permissionListener = listener
             ShizukuGranter.addPermissionListener(listener)
             ShizukuGranter.requestPermission()

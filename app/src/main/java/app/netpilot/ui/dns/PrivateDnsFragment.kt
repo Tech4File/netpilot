@@ -18,8 +18,11 @@ import app.netpilot.core.model.DnsProfile
 import android.content.Intent
 import android.net.VpnService
 import androidx.activity.result.contract.ActivityResultContracts
+import app.netpilot.core.status.StatusNotifications
 import app.netpilot.core.vpn.NetPilotVpnService
+import app.netpilot.core.vpn.PlatformVpnController
 import app.netpilot.core.vpn.SecureDnsVpnService
+import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
 import app.netpilot.databinding.DialogDnsProfileBinding
 import app.netpilot.databinding.FragmentPrivateDnsBinding
@@ -116,7 +119,9 @@ class PrivateDnsFragment : Fragment(), VpnStatusMonitor.Listener {
         _binding = null
     }
 
-    override fun onVpnChanged(active: Boolean, details: VpnStatusMonitor.VpnRuntimeInfo?) = Unit
+    override fun onVpnChanged(active: Boolean, details: VpnStatusMonitor.VpnRuntimeInfo?) {
+        if (_binding != null) refresh()
+    }
 
     // ------------------------------------------------------------------ state
 
@@ -147,6 +152,7 @@ class PrivateDnsFragment : Fragment(), VpnStatusMonitor.Listener {
         binding.dnsProfilesList.visibility = if (profiles.isEmpty()) View.GONE else View.VISIBLE
         binding.secureDnsSwitch.isChecked = SecureDnsVpnService.runningHostname != null
         suppressUiCallbacks = false
+        StatusNotifications.reconcileStatusService(requireContext())
     }
 
     // ------------------------------------------------- zero-setup secure DNS
@@ -178,11 +184,21 @@ class PrivateDnsFragment : Fragment(), VpnStatusMonitor.Listener {
     }
 
     private fun launchSecureDns(host: String) {
-        // One VPN per app: stop the OpenVPN transport if it is running.
-        requireContext().startService(
-            Intent(requireContext(), NetPilotVpnService::class.java)
-                .setAction(NetPilotVpnService.ACTION_DISCONNECT),
-        )
+        // One VPN per app: make room for the Secure-DNS tunnel.
+        var replacedSomething = false
+        if (VpnSessionState.platformSessionActive(requireContext())) {
+            PlatformVpnController(requireContext()).stop()
+            VpnSessionState.markPlatformStopped(requireContext())
+            replacedSomething = true
+        }
+        if (NetPilotVpnService.isRunning) {
+            requireContext().startService(
+                Intent(requireContext(), NetPilotVpnService::class.java)
+                    .setAction(NetPilotVpnService.ACTION_DISCONNECT),
+            )
+            replacedSomething = true
+        }
+        if (replacedSomething) toast(getString(R.string.secure_dns_vpn_replaced))
         requireContext().startService(
             Intent(requireContext(), SecureDnsVpnService::class.java)
                 .setAction(SecureDnsVpnService.ACTION_START)

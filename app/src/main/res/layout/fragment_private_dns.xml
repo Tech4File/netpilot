@@ -1,196 +1,195 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Private DNS screen. The profile list OWNS scrolling (weight=1): a
+     wrap_content RecyclerView nested in a ScrollView mis-measures and hides
+     rows past the fold (same field bug the VPN screen had). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:clipToPadding="false"
-    android:fillViewport="true"
+    android:orientation="vertical"
     android:paddingHorizontal="@dimen/screen_padding"
     android:paddingTop="@dimen/screen_padding"
-    android:paddingBottom="@dimen/space_32"
-    android:scrollbars="none">
+    android:paddingBottom="@dimen/space_16">
 
-    <LinearLayout
+    <!-- Master control (fixed) -->
+    <app.netpilot.ui.components.FocusCardView
+        android:id="@+id/dns_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:nextFocusLeft="@id/nav_rail">
 
-        <!-- Master control -->
-        <app.netpilot.ui.components.FocusCardView
-            android:id="@+id/dns_header"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:nextFocusLeft="@id/nav_rail">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="@dimen/card_padding">
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/card_padding">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/dns_title"
-                        style="@style/TextAppearance.NetPilot.Title" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_4"
-                        android:text="@string/dns_description"
-                        style="@style/TextAppearance.NetPilot.Body" />
-
-                    <app.netpilot.ui.components.StatusPill
-                        android:id="@+id/dns_status_pill"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_12" />
-                </LinearLayout>
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/dns_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/space_12"
-                    android:contentDescription="@string/cd_dns_switch"
-                    android:minHeight="@dimen/min_target" />
-            </LinearLayout>
-        </app.netpilot.ui.components.FocusCardView>
-
-        <!-- Mode selector: Off / Automatic / Profiles -->
-        <app.netpilot.ui.components.SegmentedToggle
-            android:id="@+id/dns_segment"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_16" />
-
-        <!-- Zero-setup Secure DNS (VPN mode) — no ADB required -->
-        <app.netpilot.ui.components.FocusCardView
-            android:id="@+id/secure_dns_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_16"
-            android:nextFocusLeft="@id/nav_rail">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/card_padding">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/secure_dns_card_title"
-                        style="@style/TextAppearance.NetPilot.Title" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/space_4"
-                        android:text="@string/secure_dns_card_body"
-                        style="@style/TextAppearance.NetPilot.Body" />
-                </LinearLayout>
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/secure_dns_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/space_12"
-                    android:contentDescription="@string/secure_dns_switch_cd"
-                    android:minHeight="@dimen/min_target" />
-            </LinearLayout>
-        </app.netpilot.ui.components.FocusCardView>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_12"
-            android:text="@string/secure_dns_hint"
-            style="@style/TextAppearance.NetPilot.Body" />
-
-        <!-- Profiles -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_24"
-            android:layout_marginBottom="@dimen/space_12"
-            android:text="@string/dns_profiles_section"
-            style="@style/TextAppearance.NetPilot.Label" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/dns_profiles_list"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false"
-            android:overScrollMode="never"
-            tools:itemCount="3"
-            tools:listitem="@layout/item_dns_profile" />
-
-        <app.netpilot.ui.components.EmptyStateView
-            android:id="@+id/dns_empty"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:visibility="gone"
-            app:npIcon="@drawable/ic_dns"
-            app:npTitle="@string/empty_profiles_title"
-            app:npBody="@string/empty_profiles_body" />
-
-        <app.netpilot.ui.components.FocusCardView
-            android:id="@+id/dns_add_row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_4"
-            android:nextFocusLeft="@id/nav_rail">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/card_padding">
-
-                <ImageView
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@drawable/bg_icon_badge"
-                    android:contentDescription="@string/dns_add_profile"
-                    android:padding="9dp"
-                    android:src="@drawable/ic_add"
-                    app:tint="?attr/colorPrimary" />
+                android:layout_weight="1"
+                android:orientation="vertical">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/space_16"
-                    android:text="@string/dns_add_profile"
-                    android:textSize="@dimen/text_title"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorPrimary" />
-            </LinearLayout>
-        </app.netpilot.ui.components.FocusCardView>
+                    android:text="@string/dns_title"
+                    style="@style/TextAppearance.NetPilot.Title" />
 
-        <TextView
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_4"
+                    android:text="@string/dns_description"
+                    style="@style/TextAppearance.NetPilot.Body" />
+
+                <app.netpilot.ui.components.StatusPill
+                    android:id="@+id/dns_status_pill"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_12" />
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/dns_switch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_12"
+                android:contentDescription="@string/cd_dns_switch"
+                android:minHeight="@dimen/min_target" />
+        </LinearLayout>
+    </app.netpilot.ui.components.FocusCardView>
+
+    <!-- Mode selector: Off / Automatic / Profiles (fixed) -->
+    <app.netpilot.ui.components.SegmentedToggle
+        android:id="@+id/dns_segment"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_16" />
+
+    <!-- Zero-setup Secure DNS (VPN mode) — no ADB required (fixed) -->
+    <app.netpilot.ui.components.FocusCardView
+        android:id="@+id/secure_dns_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_16"
+        android:nextFocusLeft="@id/nav_rail">
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_16"
-            android:text="@string/dns_hint_single_active"
-            style="@style/TextAppearance.NetPilot.Body" />
-    </LinearLayout>
-</ScrollView>
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="@dimen/card_padding">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/secure_dns_card_title"
+                    style="@style/TextAppearance.NetPilot.Title" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_4"
+                    android:text="@string/secure_dns_card_body"
+                    style="@style/TextAppearance.NetPilot.Body" />
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/secure_dns_switch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_12"
+                android:contentDescription="@string/secure_dns_switch_cd"
+                android:minHeight="@dimen/min_target" />
+        </LinearLayout>
+    </app.netpilot.ui.components.FocusCardView>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_12"
+        android:text="@string/secure_dns_hint"
+        style="@style/TextAppearance.NetPilot.Body" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_8"
+        android:text="@string/dns_hint_single_active"
+        style="@style/TextAppearance.NetPilot.Body" />
+
+    <!-- Profiles (scrollable region) -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_16"
+        android:layout_marginBottom="@dimen/space_12"
+        android:text="@string/dns_profiles_section"
+        style="@style/TextAppearance.NetPilot.Label" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/dns_profiles_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        android:paddingBottom="@dimen/space_12"
+        tools:itemCount="4"
+        tools:listitem="@layout/item_dns_profile" />
+
+    <app.netpilot.ui.components.EmptyStateView
+        android:id="@+id/dns_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_8"
+        android:visibility="gone"
+        app:npIcon="@drawable/ic_dns"
+        app:npTitle="@string/empty_profiles_title"
+        app:npBody="@string/empty_profiles_body" />
+
+    <!-- Add profile (fixed, always reachable) -->
+    <app.netpilot.ui.components.FocusCardView
+        android:id="@+id/dns_add_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_4"
+        android:nextFocusLeft="@id/nav_rail">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="@dimen/card_padding">
+
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_icon_badge"
+                android:contentDescription="@string/dns_add_profile"
+                android:padding="9dp"
+                android:src="@drawable/ic_add"
+                app:tint="?attr/colorPrimary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_16"
+                android:text="@string/dns_add_profile"
+                android:textSize="@dimen/text_title"
+                android:textStyle="bold"
+                android:textColor="?attr/colorPrimary" />
+        </LinearLayout>
+    </app.netpilot.ui.components.FocusCardView>
+</LinearLayout>

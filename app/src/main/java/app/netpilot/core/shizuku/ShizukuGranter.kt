@@ -39,6 +39,8 @@ object ShizukuGranter {
     }
 
     fun requestPermission() {
+        // Requires a live binder; firing it against a dead server would crash.
+        if (!serverAvailable()) return
         Shizuku.requestPermission(PERMISSION_REQUEST_CODE)
     }
 

@@ -3,6 +3,8 @@ package app.netpilot.ui.vpn
 import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,11 +14,14 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import app.netpilot.R
 import app.netpilot.core.model.VpnProfile
 import app.netpilot.core.model.VpnType
+import app.netpilot.core.status.VpnStatusService
 import app.netpilot.core.vpn.NetPilotVpnService
 import app.netpilot.core.vpn.OvpnConfigParser
 import app.netpilot.core.vpn.PlatformVpnController
+import app.netpilot.core.vpn.SecureDnsVpnService
 import app.netpilot.core.vpn.VpnDataChannel
 import app.netpilot.core.vpn.VpnProfileRepository
+import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
 import app.netpilot.databinding.DialogVpnProfileBinding
 import app.netpilot.databinding.FragmentVpnBinding
@@ -39,12 +44,21 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     private var pendingOpenVpnProfile: VpnProfile? = null
     private var suppressUiCallbacks = false
     private var editing: VpnProfile? = null
+    private val connectWatchdog = Handler(Looper.getMainLooper())
+
+    /** True while the watchdog is armed (a platform TUN is expected to appear). */
+    private var connectWatchdogArmed = false
 
     private val consentLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == android.app.Activity.RESULT_OK) {
                 pendingPlatformProfile?.let { p ->
+                    stopOtherTunnelsForNewVpn()
                     if (controller.start(p)) {
+                        // Ownership proof for the platform tunnel (no in-process
+                        // service exists for VpnManager sessions — VpnSessionState
+                        // is what keeps "our own IKEv2" out of the foreign bucket).
+                        VpnSessionState.markPlatformStarted(requireContext(), p.id, p.name)
                         repo.setLastConnectedId(p.id)
                         toast(getString(R.string.vpn_profile_connected_toast, p.name))
                     } else {
@@ -86,7 +100,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         binding.vpnSwitch.setOnCheckedChangeListener { _, checked ->
             if (suppressUiCallbacks) return@setOnCheckedChangeListener
             if (checked) {
-                val target = repo.list().firstOrNull()
+                val target = repo.lastConnectedId()?.let { repo.get(it) } ?: repo.list().firstOrNull()
                 if (target == null) {
                     refresh()
                     showProfileDialog(null)
@@ -103,16 +117,21 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     override fun onResume() {
         super.onResume()
         VpnStatusMonitor.addListener(this)
+        // Recognise our own platform IKEv2 tunnel after process death — or drop
+        // the stale marker if the tunnel is gone (reboot / teardown elsewhere).
+        VpnSessionState.reconcile(requireContext(), VpnStatusMonitor.isActive(requireContext()))
         refresh()
     }
 
     override fun onPause() {
         super.onPause()
+        disarmConnectWatchdog()
         VpnStatusMonitor.removeListener(this)
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        disarmConnectWatchdog()
         _binding = null
     }
 
@@ -124,22 +143,67 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
 
     fun refresh() {
         val context = requireContext()
+        // Self-heal an abandoned connect attempt before rendering (no screen
+        // may sit on "Connecting…" for a tunnel that will never appear).
+        VpnSessionState.clearIfExpired(context, VpnStatusMonitor.isActive(context))
         val profiles = repo.list()
         val vpnActive = VpnStatusMonitor.ourVpnActive(context)
         val foreignVpn = VpnStatusMonitor.foreignVpnActive(context)
-        val connectedId = repo.lastConnectedId()?.takeIf { vpnActive && profiles.any { p -> p.id == it } }
+        val claimed = VpnSessionState.anySessionClaimed(context)
+        val tunnelId = VpnSessionState.activeTunnel(context)?.profileId
+        val connectedId = tunnelId?.takeIf { id -> profiles.any { p -> p.id == id } }
+        val connectingId = if (!vpnActive && claimed) connectedId else null
 
         suppressUiCallbacks = true
-        binding.vpnSwitch.isChecked = vpnActive
+        binding.vpnSwitch.isChecked = vpnActive || (claimed && tunnelId != null)
         when {
             vpnActive -> binding.vpnStatusPill.set(R.string.vpn_status_connected, R.color.status_success)
+            claimed -> binding.vpnStatusPill.set(R.string.vpn_status_connecting, R.color.status_info)
             foreignVpn -> binding.vpnStatusPill.set(R.string.vpn_status_foreign, R.color.status_info)
             else -> binding.vpnStatusPill.set(R.string.vpn_status_disconnected, R.color.on_surface_variant)
         }
-        adapter.submit(profiles, connectedId)
+        adapter.submit(profiles, connectedId, connectingId)
         binding.vpnEmpty.visibility = if (profiles.isEmpty()) View.VISIBLE else View.GONE
         binding.vpnProfilesList.visibility = if (profiles.isEmpty()) View.GONE else View.VISIBLE
         suppressUiCallbacks = false
+        app.netpilot.core.status.StatusNotifications.reconcileStatusService(requireContext())
+        armConnectWatchdog(vpnActive, claimed)
+    }
+
+    /**
+     * A platform session is claimed before its TUN exists; if the transport
+     * never appears (e.g. server auth failed at the OS layer there is no
+     * callback for), the watchdog clears the claim so the UI honestly returns
+     * to Disconnected instead of sitting on "Connecting…" forever.
+     */
+    private fun armConnectWatchdog(vpnActive: Boolean, claimed: Boolean) {
+        val context = _binding?.root?.context ?: return
+        val platformPending = !vpnActive && claimed &&
+            !NetPilotVpnService.isRunning &&
+            SecureDnsVpnService.runningHostname == null &&
+            VpnSessionState.platformSessionActive(context)
+        when {
+            platformPending && !connectWatchdogArmed -> {
+                connectWatchdogArmed = true
+                connectWatchdog.postDelayed({ onConnectWatchdogFired() }, CONNECT_TIMEOUT_MS)
+            }
+            !platformPending && connectWatchdogArmed -> disarmConnectWatchdog()
+        }
+    }
+
+    private fun disarmConnectWatchdog() {
+        connectWatchdogArmed = false
+        connectWatchdog.removeCallbacksAndMessages(null)
+    }
+
+    private fun onConnectWatchdogFired() {
+        connectWatchdogArmed = false
+        val context = _binding?.root?.context ?: return
+        if (VpnSessionState.platformSessionActive(context) && !VpnStatusMonitor.isActive(context)) {
+            VpnSessionState.markPlatformStopped(context)
+            toast(getString(R.string.vpn_start_failed))
+        }
+        refresh()
     }
 
     // --------------------------------------------------------------- connect
@@ -174,11 +238,40 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             pendingPlatformProfile = profile
             consentLauncher.launch(consent)
         } else if (controller.start(profile)) {
+            stopOtherTunnelsForNewVpn()
+            VpnSessionState.markPlatformStarted(requireContext(), profile.id, profile.name)
             repo.setLastConnectedId(profile.id)
             toast(getString(R.string.vpn_profile_connected_toast, profile.name))
             refresh()
         } else {
             toast(getString(R.string.vpn_start_failed))
+        }
+    }
+
+    /**
+     * Android enforces one active VPN system-wide; make room for the new
+     * NetPilot tunnel by stopping the other tunnels we own. Never called
+     * before the replacement is actually starting, so cancelling a consent
+     * dialog never tears down a working tunnel.
+     */
+    private fun stopOtherTunnelsForNewVpn() {
+        val context = requireContext()
+        if (VpnSessionState.platformSessionActive(context)) {
+            controller.stop()
+            VpnSessionState.markPlatformStopped(context)
+        }
+        if (NetPilotVpnService.isRunning) {
+            context.startService(
+                Intent(context, NetPilotVpnService::class.java)
+                    .setAction(NetPilotVpnService.ACTION_DISCONNECT),
+            )
+        }
+        if (SecureDnsVpnService.runningHostname != null) {
+            context.startService(
+                Intent(context, SecureDnsVpnService::class.java)
+                    .setAction(SecureDnsVpnService.ACTION_STOP),
+            )
+            toast(getString(R.string.secure_dns_vpn_replaced))
         }
     }
 
@@ -205,33 +298,46 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     }
 
     private fun startOpenVpnService(profile: VpnProfile) {
+        stopOtherTunnelsForNewVpn()
         val intent = Intent(requireContext(), NetPilotVpnService::class.java)
             .setAction(NetPilotVpnService.ACTION_CONNECT)
             .putExtra(NetPilotVpnService.EXTRA_OVPN, profile.ovpnConfig)
             .putExtra(NetPilotVpnService.EXTRA_SESSION, profile.name)
+            .putExtra(NetPilotVpnService.EXTRA_PROFILE_ID, profile.id)
         requireContext().startService(intent)
         repo.setLastConnectedId(profile.id)
         refresh()
     }
 
     private fun stopAll() {
-        if (!VpnStatusMonitor.ourVpnActive(requireContext())) {
-            if (VpnStatusMonitor.foreignVpnActive(requireContext())) {
-                toast(getString(R.string.vpn_foreign_active_toast))
-            } else {
-                toast(getString(R.string.vpn_not_active_toast))
-            }
-            repo.setLastConnectedId(null)
-            refresh()
-            return
-        }
+        val context = requireContext()
+        val hadOurs = VpnSessionState.anySessionClaimed(context)
+        // Stop every tunnel we own — the platform session (a no-op when none),
+        // the OpenVPN transport and the Secure-DNS tunnel.
         controller.stop()
-        requireContext().startService(
-            Intent(requireContext(), NetPilotVpnService::class.java)
-                .setAction(NetPilotVpnService.ACTION_DISCONNECT),
-        )
+        VpnSessionState.markPlatformStopped(context)
+        // Only wake the transport service when it is actually running —
+        // launching it just to say "disconnect" costs a process start.
+        if (NetPilotVpnService.isRunning) {
+            context.startService(
+                Intent(context, NetPilotVpnService::class.java)
+                    .setAction(NetPilotVpnService.ACTION_DISCONNECT),
+            )
+        }
+        if (SecureDnsVpnService.runningHostname != null) {
+            context.startService(
+                Intent(context, SecureDnsVpnService::class.java)
+                    .setAction(SecureDnsVpnService.ACTION_STOP),
+            )
+        }
+        VpnStatusService.stop(context)
         repo.setLastConnectedId(null)
-        toast(getString(R.string.vpn_profile_stopped_toast))
+        when {
+            hadOurs -> toast(getString(R.string.vpn_profile_stopped_toast))
+            VpnStatusMonitor.foreignVpnActive(context) ->
+                toast(getString(R.string.vpn_foreign_active_toast))
+            else -> toast(getString(R.string.vpn_not_active_toast))
+        }
         refresh()
     }
 
@@ -242,8 +348,14 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             .setTitle(R.string.delete_profile_title)
             .setMessage(getString(R.string.delete_vpn_profile_msg, profile.name))
             .setPositiveButton(R.string.action_delete) { _, _ ->
+                val tunnel = VpnSessionState.activeTunnel(requireContext())
                 repo.delete(profile.id)
-                refresh()
+                if (tunnel?.profileId == profile.id) {
+                    // Deleting the connected profile also tears its tunnel down.
+                    stopAll()
+                } else {
+                    refresh()
+                }
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
@@ -477,4 +589,9 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
 
     private fun toast(message: String) =
         android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show()
+
+    private companion object {
+        /** How long a claimed platform session may wait for its TUN to appear. */
+        const val CONNECT_TIMEOUT_MS = 10_000L
+    }
 }
