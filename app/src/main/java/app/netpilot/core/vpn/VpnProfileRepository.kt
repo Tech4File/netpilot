@@ -123,6 +123,7 @@ class VpnProfileRepository(context: Context) {
                         caCertPem = o.optString("caCertPem").takeIf { it.isNotBlank() },
                         ovpnConfig = o.optString("ovpnConfig").takeIf { it.isNotBlank() },
                         ovpnSummary = o.optString("ovpnSummary").takeIf { it.isNotBlank() },
+                        wgConfig = o.optString("wgConfig").takeIf { it.isNotBlank() },
                     )
                 }
             }
@@ -149,6 +150,7 @@ class VpnProfileRepository(context: Context) {
                     .put("caCertPem", p.caCertPem ?: JSONObject.NULL)
                     .put("ovpnConfig", p.ovpnConfig ?: JSONObject.NULL)
                     .put("ovpnSummary", p.ovpnSummary ?: JSONObject.NULL)
+                    .put("wgConfig", p.wgConfig ?: JSONObject.NULL)
             )
         }
         prefs.edit().putString(KEY_PROFILES, arr.toString()).apply()

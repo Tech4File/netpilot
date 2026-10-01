@@ -15,6 +15,7 @@ import app.netpilot.R
 import app.netpilot.core.model.VpnProfile
 import app.netpilot.core.model.VpnType
 import app.netpilot.core.status.VpnStatusService
+import app.netpilot.core.vpn.EngineBridge
 import app.netpilot.core.vpn.NetPilotVpnService
 import app.netpilot.core.vpn.OvpnConfigParser
 import app.netpilot.core.vpn.PlatformVpnController
@@ -23,6 +24,10 @@ import app.netpilot.core.vpn.VpnDataChannel
 import app.netpilot.core.vpn.VpnProfileRepository
 import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
+import app.netpilot.core.vpn.WgConfigCheck
+import app.netpilot.core.vpn.WireGuardConfBuilder
+import app.netpilot.core.vpn.WireGuardManager
+import app.netpilot.core.vpn.WireGuardRuntime
 import app.netpilot.databinding.DialogVpnProfileBinding
 import app.netpilot.databinding.FragmentVpnBinding
 import app.netpilot.ui.components.SegmentedToggle
@@ -42,6 +47,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     private lateinit var adapter: VpnProfilesAdapter
     private var pendingPlatformProfile: VpnProfile? = null
     private var pendingOpenVpnProfile: VpnProfile? = null
+    private var pendingWgProfile: VpnProfile? = null
     private var suppressUiCallbacks = false
     private var editing: VpnProfile? = null
     private val connectWatchdog = Handler(Looper.getMainLooper())
@@ -66,12 +72,15 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
                     }
                 }
                 pendingOpenVpnProfile?.let { startOpenVpnService(it) }
+                pendingWgProfile?.let { startWireGuardNow(it) }
                 pendingPlatformProfile = null
                 pendingOpenVpnProfile = null
+                pendingWgProfile = null
                 refresh()
             } else {
                 pendingPlatformProfile = null
                 pendingOpenVpnProfile = null
+                pendingWgProfile = null
                 toast(getString(R.string.vpn_consent_failed))
                 refresh()
             }
@@ -159,6 +168,8 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         when {
             vpnActive -> binding.vpnStatusPill.set(R.string.vpn_status_connected, R.color.status_success)
             claimed -> binding.vpnStatusPill.set(R.string.vpn_status_connecting, R.color.status_info)
+            foreignVpn && EngineBridge.primaryEngineInstalled(context) ->
+                binding.vpnStatusPill.set(R.string.vpn_status_engine, R.color.status_info)
             foreignVpn -> binding.vpnStatusPill.set(R.string.vpn_status_foreign, R.color.status_info)
             else -> binding.vpnStatusPill.set(R.string.vpn_status_disconnected, R.color.on_surface_variant)
         }
@@ -221,7 +232,49 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         when (profile.type) {
             VpnType.PLATFORM_IKEV2 -> connectPlatform(profile)
             VpnType.OPENVPN -> connectOpenVpn(profile)
+            VpnType.WIREGUARD -> connectWireGuard(profile)
         }
+    }
+
+    /** WireGuard runs INSIDE NetPilot (embedded official engine) — one app. */
+    private fun connectWireGuard(profile: VpnProfile) {
+        if (profile.wgConfig.isNullOrBlank()) {
+            toast(getString(R.string.err_wg_needs_config))
+            return
+        }
+        val prepare = VpnService.prepare(requireContext())
+        if (prepare != null) {
+            pendingWgProfile = profile
+            consentLauncher.launch(prepare)
+        } else {
+            startWireGuardNow(profile)
+        }
+    }
+
+    private fun startWireGuardNow(profile: VpnProfile) {
+        val context = requireContext()
+        // One VPN at a time: make room, then bring up the embedded engine.
+        stopOtherTunnelsForNewVpn(silent = true)
+        toast(getString(R.string.wg_connecting_toast))
+        WireGuardManager.get(context).connect(
+            profile,
+            onResult = { ok, errRes ->
+                if (ok) {
+                    repo.setLastConnectedId(profile.id)
+                    toast(getString(R.string.wg_started_toast, profile.name))
+                } else {
+                    toast(getString(errRes))
+                }
+                refresh()
+            },
+            onHandshake = { confirmed ->
+                toast(
+                    getString(
+                        if (confirmed) R.string.wg_handshake_ok else R.string.wg_no_handshake,
+                    ),
+                )
+            },
+        )
     }
 
     private fun connectPlatform(profile: VpnProfile) {
@@ -254,7 +307,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
      * before the replacement is actually starting, so cancelling a consent
      * dialog never tears down a working tunnel.
      */
-    private fun stopOtherTunnelsForNewVpn() {
+    private fun stopOtherTunnelsForNewVpn(silent: Boolean = false) {
         val context = requireContext()
         if (VpnSessionState.platformSessionActive(context)) {
             controller.stop()
@@ -271,30 +324,79 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
                 Intent(context, SecureDnsVpnService::class.java)
                     .setAction(SecureDnsVpnService.ACTION_STOP),
             )
-            toast(getString(R.string.secure_dns_vpn_replaced))
+            if (!silent) toast(getString(R.string.secure_dns_vpn_replaced))
+        }
+        if (WireGuardRuntime.isRunning) {
+            WireGuardManager.get(context).disconnect()
         }
     }
 
     private fun connectOpenVpn(profile: VpnProfile) {
-        if (VpnDataChannel.factory == null) {
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.ovpn_engine_title)
-                .setMessage(getString(R.string.ovpn_engine_msg))
-                .setPositiveButton(R.string.action_ok, null)
-                .show()
-            return
-        }
         if (profile.ovpnConfig.isNullOrBlank()) {
             toast(getString(R.string.err_no_ovpn))
             return
         }
-        val prepare = VpnService.prepare(requireContext())
-        if (prepare != null) {
-            pendingOpenVpnProfile = profile
-            consentLauncher.launch(prepare)
-        } else {
-            startOpenVpnService(profile)
+        // A bundled engine module (optional, not shipped) takes the in-app path.
+        if (VpnDataChannel.factory != null) {
+            val prepare = VpnService.prepare(requireContext())
+            if (prepare != null) {
+                pendingOpenVpnProfile = profile
+                consentLauncher.launch(prepare)
+            } else {
+                startOpenVpnService(profile)
+            }
+            return
         }
+        // Standard path: drive the official open-source engine app through its
+        // documented external control API (works on Android 9/10, where the
+        // platform IKEv2 API does not exist).
+        showEngineBridge(profile)
+    }
+
+    /** Import / connect flow for the external OpenVPN engine app. */
+    private fun showEngineBridge(profile: VpnProfile) {
+        val context = requireContext()
+        val name = profile.name
+        val config = profile.ovpnConfig ?: return
+        if (!EngineBridge.primaryEngineInstalled(context)) {
+            MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.engine_bridge_title)
+                .setMessage(R.string.engine_install_msg)
+                .setPositiveButton(R.string.engine_install_btn) { _, _ ->
+                    if (!EngineBridge.launchInstall(context)) {
+                        toast(getString(R.string.engine_handoff_failed))
+                    }
+                }
+                .setNegativeButton(R.string.action_cancel, null)
+                .show()
+            return
+        }
+        val message = getString(R.string.engine_import_hint, name) + "\n\n" +
+            getString(R.string.engine_connect_hint, name)
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.engine_bridge_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.engine_import_btn) { _, _ ->
+                if (EngineBridge.launchImport(context, name, config)) {
+                    toast(getString(R.string.engine_handoff_ok))
+                } else {
+                    toast(getString(R.string.engine_handoff_failed))
+                }
+            }
+            .setNeutralButton(R.string.engine_connect_btn) { _, _ ->
+                // Make room: Android allows one active VPN; our tunnels and the
+                // engine's cannot coexist (system strict Private DNS can).
+                stopOtherTunnelsForNewVpn(silent = true)
+                if (EngineBridge.launchConnect(context, name)) {
+                    toast(getString(R.string.engine_connect_sent))
+                    repo.setLastConnectedId(profile.id)
+                } else {
+                    toast(getString(R.string.engine_connect_missing))
+                }
+                refresh()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
     }
 
     private fun startOpenVpnService(profile: VpnProfile) {
@@ -329,6 +431,14 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
                 Intent(context, SecureDnsVpnService::class.java)
                     .setAction(SecureDnsVpnService.ACTION_STOP),
             )
+        }
+        if (WireGuardRuntime.isRunning) {
+            WireGuardManager.get(context).disconnect()
+        }
+        // If the active tunnel belongs to the engine app, ask IT to stop too —
+        // DisconnectVPN only ever touches the engine's own VPN.
+        if (VpnStatusMonitor.foreignVpnActive(context)) {
+            EngineBridge.launchDisconnect(context)
         }
         VpnStatusService.stop(context)
         repo.setLastConnectedId(null)
@@ -366,12 +476,39 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         val dialogBinding = DialogVpnProfileBinding.inflate(layoutInflater)
         val segment = dialogBinding.vpnTypeSegment
 
-        val initialType = existing?.type ?: VpnType.PLATFORM_IKEV2
+        val initialType = existing?.type ?: VpnType.defaultFor(android.os.Build.VERSION.SDK_INT)
         var currentType = initialType
         fun renderFields(type: VpnType) {
             currentType = type
+            // Per-type, per-device availability hint (the add-ons feel native).
+            val hintRes = when {
+                type == VpnType.PLATFORM_IKEV2 && android.os.Build.VERSION.SDK_INT < 30 ->
+                    R.string.hint_ikev2_needs_11
+                type == VpnType.PLATFORM_IKEV2 -> R.string.hint_ikev2_native
+                type == VpnType.WIREGUARD -> R.string.hint_wg_embedded
+                else -> R.string.hint_ovpn_engine
+            }
+            dialogBinding.vpnTypeHint.setText(hintRes)
+            dialogBinding.vpnTypeHint.setTextColor(
+                androidx.core.content.ContextCompat.getColor(
+                    requireContext(),
+                    if (type == VpnType.PLATFORM_IKEV2 && android.os.Build.VERSION.SDK_INT < 30) {
+                        R.color.status_warning
+                    } else {
+                        R.color.on_surface_variant
+                    },
+                ),
+            )
             dialogBinding.tilPort.visibility =
-                if (type == VpnType.OPENVPN) View.VISIBLE else View.GONE
+                if (type == VpnType.OPENVPN || type == VpnType.WIREGUARD) View.VISIBLE else View.GONE
+            val wgSection = type == VpnType.WIREGUARD
+            dialogBinding.tilWgAddress.visibility = if (wgSection) View.VISIBLE else View.GONE
+            dialogBinding.wgClientKeyRow.visibility = if (wgSection) View.VISIBLE else View.GONE
+            dialogBinding.tilWgPeerKey.visibility = if (wgSection) View.VISIBLE else View.GONE
+            dialogBinding.tilWgAllowedIps.visibility = if (wgSection) View.VISIBLE else View.GONE
+            if (wgSection && dialogBinding.etWgAllowedIps.text.isNullOrBlank()) {
+                dialogBinding.etWgAllowedIps.setText("0.0.0.0/0, ::/0")
+            }
             dialogBinding.btnImportOvpn.visibility = View.VISIBLE
             dialogBinding.tilUsername.visibility =
                 if (type == VpnType.PLATFORM_IKEV2) View.VISIBLE else View.GONE
@@ -380,13 +517,25 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             dialogBinding.tilPsk.visibility =
                 if (type == VpnType.PLATFORM_IKEV2) View.VISIBLE else View.GONE
             dialogBinding.btnImportOvpn.setText(
-                if (type == VpnType.OPENVPN) R.string.btn_import_ovpn else R.string.btn_import_ca,
+                when (type) {
+                    VpnType.OPENVPN -> R.string.btn_import_ovpn
+                    VpnType.WIREGUARD -> R.string.btn_import_wg
+                    VpnType.PLATFORM_IKEV2 -> R.string.btn_import_ca
+                },
             )
         }
 
         segment.configure(
-            items = listOf(getString(R.string.vpn_type_ikev2), getString(R.string.vpn_type_openvpn)),
-            initialIndex = if (initialType == VpnType.PLATFORM_IKEV2) 0 else 1,
+            items = listOf(
+                getString(R.string.vpn_type_ikev2),
+                getString(R.string.vpn_type_openvpn),
+                getString(R.string.vpn_type_wireguard),
+            ),
+            initialIndex = when (initialType) {
+                VpnType.PLATFORM_IKEV2 -> 0
+                VpnType.OPENVPN -> 1
+                VpnType.WIREGUARD -> 2
+            },
             listener = object : SegmentedToggle.OnSelectionListener {
                 override fun onSelected(index: Int) {
                     renderFields(if (index == 0) VpnType.PLATFORM_IKEV2 else VpnType.OPENVPN)
@@ -394,6 +543,26 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             },
         )
         renderFields(initialType)
+
+        // On-device client key generation for the manual (own-server) flow.
+        dialogBinding.btnWgGenerate.setOnClickListener {
+            val (priv, pub) = WireGuardConfBuilder.generateKeyPair()
+            dialogBinding.etWgClientKey.setText(priv)
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.action_wg_generate)
+                .setMessage(getString(R.string.wg_public_key_show, pub))
+                .setPositiveButton(R.string.action_copy) { _, _ ->
+                    val clipboard =
+                        requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(
+                        android.content.ClipData.newPlainText("wg pubkey", pub),
+                    )
+                    toast(getString(R.string.export_ok))
+                }
+                .setNegativeButton(R.string.action_ok, null)
+                .show()
+        }
 
         dialogBinding.etName.setText(existing?.name.orEmpty())
         dialogBinding.etServer.setText(existing?.serverHost.orEmpty())
@@ -411,12 +580,12 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
 
         dialogBinding.btnImportOvpn.setOnClickListener {
             activeVpnDialogBinding = dialogBinding
-            // Two dedicated launchers below — the callback always knows what it
-            // is handling, so a stale toggle index can never cross the streams.
-            if (currentType == VpnType.OPENVPN) {
-                ovpnPicker.launch(arrayOf("*/*"))
-            } else {
-                caPicker.launch(arrayOf("*/*"))
+            // Dedicated launchers — the callback always knows what it is
+            // handling, so a stale toggle index can never cross the streams.
+            when (currentType) {
+                VpnType.OPENVPN -> ovpnPicker.launch(arrayOf("*/*"))
+                VpnType.WIREGUARD -> wgPicker.launch(arrayOf("*/*"))
+                VpnType.PLATFORM_IKEV2 -> caPicker.launch(arrayOf("*/*"))
             }
         }
 
@@ -431,15 +600,21 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             .also { dialog ->
                 dialog.setOnDismissListener { activeVpnDialogBinding = null }
                 dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
-                    val type = if (segment.selectedIndex == 0) VpnType.PLATFORM_IKEV2 else VpnType.OPENVPN
+                    val type = when (segment.selectedIndex) {
+                        0 -> VpnType.PLATFORM_IKEV2
+                        1 -> VpnType.OPENVPN
+                        else -> VpnType.WIREGUARD
+                    }
                     saveProfile(
                         dialogBinding, type,
                         lastImportedConfig, lastImportedSummary, lastImportedCaPem,
+                        lastImportedWg,
                         dialog,
                     )
                     lastImportedConfig = null
                     lastImportedSummary = null
                     lastImportedCaPem = null
+                    lastImportedWg = null
                 }
                 dialogBinding.etName.requestFocus()
             }
@@ -497,6 +672,33 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     private var lastImportedConfig: String? = null
     private var lastImportedSummary: String? = null
     private var lastImportedCaPem: String? = null
+    private var lastImportedWg: String? = null
+
+    private val wgPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            val dialogBinding = activeVpnDialogBinding
+            if (uri == null || dialogBinding == null) return@registerForActivityResult
+            val bytes = runCatching {
+                requireContext().contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }.getOrNull()
+            if (bytes == null) {
+                toast(getString(R.string.import_err))
+                return@registerForActivityResult
+            }
+            val text = bytes.toString(Charsets.UTF_8)
+            if (!WgConfigCheck.isPlausible(text)) {
+                toast(getString(R.string.err_wg_invalid))
+                return@registerForActivityResult
+            }
+            lastImportedWg = text
+            WgConfigCheck.endpointOf(text)?.let { (host, port) ->
+                dialogBinding.etServer.setText(host)
+                if (dialogBinding.etPort.text.isNullOrBlank()) {
+                    dialogBinding.etPort.setText(port.toString())
+                }
+            }
+            toast(getString(R.string.wg_imported_ok))
+        }
 
     private fun saveProfile(
         dialogBinding: DialogVpnProfileBinding,
@@ -504,6 +706,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         importedConfig: String?,
         importedSummary: String?,
         importedCaPem: String?,
+        importedWg: String?,
         dialog: androidx.appcompat.app.AlertDialog,
     ) {
         val name = dialogBinding.etName.text?.toString()?.trim().orEmpty()
@@ -537,6 +740,33 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             valid = false
         }
 
+        var wgConf = importedWg ?: editing?.wgConfig
+        if (type == VpnType.WIREGUARD) {
+            if (wgConf.isNullOrBlank()) {
+                // Direct field input: assemble a real .conf from the fields
+                // (client key can be generated in-dialog). Endpoint comes from
+                // the server + port fields.
+                val assembled = WireGuardConfBuilder.assembleOrNull(
+                    address = dialogBinding.etWgAddress.text?.toString().orEmpty(),
+                    clientKey = dialogBinding.etWgClientKey.text?.toString().orEmpty(),
+                    peerKey = dialogBinding.etWgPeerKey.text?.toString().orEmpty(),
+                    endpointHost = server,
+                    endpointPort = port,
+                    allowedIps = dialogBinding.etWgAllowedIps.text?.toString().orEmpty(),
+                )
+                if (assembled == null) {
+                    dialogBinding.tilServer.error = getString(R.string.err_wg_manual_fields)
+                    valid = false
+                } else {
+                    wgConf = assembled
+                    toast(getString(R.string.wg_manual_assembled))
+                }
+            } else if (!WgConfigCheck.isPlausible(wgConf)) {
+                dialogBinding.tilServer.error = getString(R.string.err_wg_invalid)
+                valid = false
+            }
+        }
+
         val caCert = importedCaPem ?: editing?.caCertPem
         if (type == VpnType.PLATFORM_IKEV2 && psk.isBlank() && caCert.isNullOrBlank()) {
             toast(getString(R.string.ikev2_need_ca))
@@ -564,6 +794,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
                     caCertPem = caCert,
                     ovpnConfig = config,
                     ovpnSummary = summary,
+                    wgConfig = wgConf,
                 ),
             )
         } else {
@@ -580,6 +811,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
                     caCertPem = caCert,
                     ovpnConfig = config,
                     ovpnSummary = summary,
+                    wgConfig = wgConf,
                 ),
             )
         }

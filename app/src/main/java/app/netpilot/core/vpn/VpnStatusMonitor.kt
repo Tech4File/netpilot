@@ -63,6 +63,7 @@ object VpnStatusMonitor {
         isActive(context) && (
             NetPilotVpnService.isRunning ||
                 SecureDnsVpnService.runningHostname != null ||
+                WireGuardRuntime.isRunning ||
                 VpnSessionState.platformSessionActive(context)
             )
 

@@ -3,11 +3,12 @@ package app.netpilot.ui.licenses
 /**
  * In-app open-source attributions (Settings → Open-source licenses).
  *
- * NetPilot's RUNTIME code uses only first-party Android libraries
- * (AndroidX/Jetpack, Material Components, Kotlin stdlib, platform APIs).
- * Everything else below is build- or test-time tooling that is not part of the
- * shipped APK, or the platform itself — listed here in the spirit of full
- * transparency that open source deserves.
+ * NetPilot's RUNTIME code uses first-party Android libraries plus the two
+ * embedded engines that make it fully self-sufficient: the Shizuku grant
+ * bridge and the official WireGuard tunnel library. Everything else below is
+ * build- or test-time tooling that is not part of the shipped APK, or the
+ * platform itself — listed here in the spirit of full transparency that open
+ * source deserves.
  */
 data class LicenseEntry(
     val name: String,
@@ -47,6 +48,24 @@ object LicenseCatalog {
             "Shizuku API (RikkaApps)",
             "Optional integration: lets NetPilot receive the WRITE_SECURE_SETTINGS grant through the Shizuku server - no PC needed. Used only when the user opts in.",
             "MIT License",
+            shipped = true,
+        ),
+        LicenseEntry(
+            "WireGuard tunnel library (wireguard-android)",
+            "The official WireGuard userspace engine embedded in NetPilot: runs WireGuard tunnels inside this app — no second app, no root. Includes wireguard-go (MIT). Copyright WireGuard LLC. WireGuard is a registered trademark of Jason A. Donenfeld.",
+            "Apache License 2.0",
+            shipped = true,
+        ),
+        LicenseEntry(
+            "OpenVPN (engine bridge / planned core)",
+            "OpenVPN profiles connect through the official open-source OpenVPN for Android app via its documented external control API. OpenVPN® is a registered trademark of OpenVPN, Inc. An embedded AGPL-3.0 core is engineered in docs/OPENVPN_CORE.md.",
+            "External app (AGPL-3.0) — not bundled",
+            shipped = false,
+        ),
+        LicenseEntry(
+            "desugar_jdk_libs (Google)",
+            "Java library-desugaring runtime required by the WireGuard tunnel library.",
+            "Apache License 2.0",
             shipped = true,
         ),
         LicenseEntry(

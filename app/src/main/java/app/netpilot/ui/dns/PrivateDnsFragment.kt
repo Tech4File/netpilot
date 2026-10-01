@@ -24,6 +24,8 @@ import app.netpilot.core.vpn.PlatformVpnController
 import app.netpilot.core.vpn.SecureDnsVpnService
 import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
+import app.netpilot.core.vpn.WireGuardManager
+import app.netpilot.core.vpn.WireGuardRuntime
 import app.netpilot.databinding.DialogDnsProfileBinding
 import app.netpilot.databinding.FragmentPrivateDnsBinding
 import app.netpilot.ui.dialogs.SetupDialogs
@@ -196,6 +198,10 @@ class PrivateDnsFragment : Fragment(), VpnStatusMonitor.Listener {
                 Intent(requireContext(), NetPilotVpnService::class.java)
                     .setAction(NetPilotVpnService.ACTION_DISCONNECT),
             )
+            replacedSomething = true
+        }
+        if (WireGuardRuntime.isRunning) {
+            WireGuardManager.get(requireContext()).disconnect()
             replacedSomething = true
         }
         if (replacedSomething) toast(getString(R.string.secure_dns_vpn_replaced))

@@ -1,5 +1,6 @@
 package app.netpilot.core.model
 
+import android.os.Build
 import androidx.annotation.StringRes
 import app.netpilot.R
 
@@ -35,6 +36,18 @@ enum class VpnType(val labelRes: Int) {
 
     /** OpenVPN-compatible profile (.ovpn import). Data channel is pluggable — see README. */
     OPENVPN(R.string.vpn_type_openvpn),
+
+    /** WireGuard profile (.conf import) via the embedded official userspace engine. */
+    WIREGUARD(R.string.vpn_type_wireguard);
+
+    companion object {
+        /**
+         * Sensible default per device: the platform IKEv2 engine from Android
+         * 11, the embedded WireGuard engine below it (Android 9/10 TVs).
+         */
+        fun defaultFor(sdkInt: Int): VpnType =
+            if (sdkInt >= Build.VERSION_CODES.R) PLATFORM_IKEV2 else WIREGUARD
+    }
 }
 
 enum class VpnAuthType { USER_PASS, PSK }
@@ -54,4 +67,6 @@ data class VpnProfile(
     val caCertPem: String? = null,
     val ovpnConfig: String? = null,
     val ovpnSummary: String? = null,
+    /** Raw WireGuard .conf (contains keys — never exported/backup-shipped). */
+    val wgConfig: String? = null,
 )

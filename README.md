@@ -56,13 +56,32 @@ No computer? Install Termux on any Android phone → `pkg install android-tools`
 - Input validation with dedicated errors for "that's an IP, Private DNS needs a hostname"
 - Live system-state sync via `ContentObserver` (catches out-of-app changes instantly)
 
-### 🛡 VPN
+### 🛡 VPN — works on every supported Android version
+
+| Android | WireGuard (embedded) | IKEv2 (platform) | OpenVPN |
+|---|---|---|---|
+| **9 / 10 (TV focus)** | ✅ in-app, one app | — (needs 11+) | ✅ engine bridge · embedded core in development |
+| **11+** | ✅ in-app, one app | ✅ in-app (platform engine) | ✅ engine bridge · embedded core in development |
+
 - **Native platform IKEv2/IPsec** (Android 11+): the OS implements the protocol — NetPilot only
   provisions and starts/stops it via `VpnManager`/`Ikev2VpnProfile` (PSK or username/password + CA cert)
 - **OpenVPN** profiles: import `.ovpn` files with a built-in first-party config parser
-  (remotes, ciphers, inline CA/cert/key blocks, auth style). The packet-level engine is a pluggable
-  seam — see `core.vpn.VpnDataChannel` and [docs/SECURITY.md](docs/SECURITY.md)
-- Android keeps one VPN active system-wide; the UI mirrors that honestly
+  (remotes, ciphers, inline CA/cert/key blocks, auth style)
+- **WireGuard — embedded engine, ONE app**: the official `wireguard-android` tunnel library
+  (Apache-2.0, userspace `wireguard-go`) ships inside NetPilot. Import your server's `.conf`
+  (`WgConfigCheck` pre-validates it), connect, done — this is the DEFAULT type on Android 9/10,
+  where the platform IKEv2 API does not exist. Runs through NetPilot's own state machine,
+  notification and Turn-off action; the server needs WireGuard enabled (every serious
+  server/provider supports it alongside OpenVPN)
+- **OpenVPN engine bridge** — the OpenVPN path: the OpenVPN protocol core is a large native C++
+  codebase (AGPL) with crypto inside the privileged VPN path; bundling it is a project of its own
+  (planned). Today NetPilot drives the official open-source **OpenVPN for Android** app through
+  its documented external control API: one-time profile hand-off (`FileProvider` + `ACTION_VIEW`),
+  then connect/disconnect via `de.blinkt.openvpn.api.ConnectVPN` / `DisconnectVPN`. A bundled
+  in-app OpenVPN core remains possible via the pluggable `core.vpn.VpnDataChannel` seam
+  (see [docs/SECURITY.md](docs/SECURITY.md))
+- Android keeps one VPN active system-wide; the UI mirrors that honestly — an engine-app tunnel is
+  reported as "Engine VPN active", never as NetPilot's own
 
 ### 🧭 TV-first UX
 - Left **navigation rail** on TV (Netflix-style), bottom navigation on phones/tablets

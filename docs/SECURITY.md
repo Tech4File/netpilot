@@ -7,7 +7,7 @@
 | ISP / LAN snooping of DNS lookups | System-wide DNS-over-TLS via Private DNS (strict mode) |
 | Malicious app silently changing system DNS | Android keeps `WRITE_SECURE_SETTINGS` protected; the grant is explicit and one-time |
 | Phishing a user into installing a fake "settings helper" | NetPilot is fully open source; the ADB command it requests is shown verbatim and grants *only* secure-settings write |
-| Traffic correlation on hostile networks | Optional user-controlled VPN (IKEv2 platform or OpenVPN profiles) |
+| Traffic correlation on hostile networks | Optional user-controlled VPN (IKEv2 platform, embedded WireGuard, or OpenVPN profiles) |
 | "I can't use ADB" leading users to root or sketchy helper apps | Zero-setup Secure DNS: first-party DoT tunnel behind the standard VpnService consent — one remote tap, no ADB |
 | Data exfiltration by the app itself | App performs zero network I/O of its own; enforced by code review + `network_security_config` (cleartext banned) + no permissions beyond `INTERNET`/`ACCESS_NETWORK_STATE`/`FOREGROUND_SERVICE*` |
 | Profile theft via cloud backup | Profile storage excluded from backup/device-transfer; VPN secrets never exported |
@@ -28,7 +28,8 @@
 - Provider hostname is bootstrap-resolved **before** the tunnel opens, so the DoT connection can
   never recurse into the tunnel.
 - The TUN routes a single /32 (the DNS address) — no general traffic capture, no filtering, no logs.
-- Same-app exclusivity: starting it stops the OpenVPN transport (Android allows one VPN per app).
+- Same-app exclusivity: starting it stops any other NetPilot tunnel (OpenVPN transport, embedded
+  WireGuard, platform IKEv2 session) — Android allows one VPN per app.
 
 ## Key storage facts
 - Profiles: app-private `SharedPreferences` (JSON), excluded from backup *and* device transfer.
@@ -43,6 +44,8 @@
 |---|---|---|
 | DNS engine (settings + validation + repos) | **first-party** (`core.dns`) | yes |
 | OpenVPN config parser, CA parser | **first-party** (`core.vpn`) | yes |
+| WireGuard userspace engine (`wireguard-android` tunnel lib) | third-party, **Apache-2.0**, disclosed in-app; carries native `.so` per ABI | yes |
+| OpenVPN protocol core | **AGPL-3.0** — embedded module is planned/engineered (see [OPENVPN_CORE.md](OPENVPN_CORE.md)); today OpenVPN connects via the official engine-app bridge | bridge = external app |
 | TV components, palettes, navigation | **first-party** (`ui.components`) | yes |
 | UI plumbing (AndroidX, Material 3, Kotlin stdlib) | Google first-party Android libraries | yes |
 | VPN protocol engine (IKEv2/IPsec) | Android OS itself | OS |

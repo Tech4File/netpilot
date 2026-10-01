@@ -321,7 +321,16 @@ jobs:
           First launch (TV/phone) needs the one-time permission:
             adb shell pm grant app.netpilot android.permission.WRITE_SECURE_SETTINGS
           Updates: install any NEWER NetPilot version straight over the
-          old one (profiles and settings are kept).
+          old one (profiles and settings are kept). Release builds can
+          only update release builds — a dev/debug-signed APK will be
+          rejected with "App not installed" (Android signature policy).
+
+          VPN engines (pick per device — NetPilot pre-selects):
+            Android 11+: IKEv2 (platform engine), WireGuard (embedded),
+            OpenVPN (engine bridge).
+            Android 9/10: WireGuard (embedded, one app) — the default;
+            OpenVPN via the engine bridge. WireGuard needs your server
+            or provider to offer WireGuard configs (.conf).
           GUIDE
           sed -i 's/^          //' release-staging/INSTALL-GUIDE.txt
           (cd release-staging && zip -q "NetPilot-v${VERSION}.apk.zip" *.apk INSTALL-GUIDE.txt)

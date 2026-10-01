@@ -30,8 +30,8 @@ android {
         // versionName below is NEW (no matching vX.Y.Z tag exists yet). No bump
         // => the Release run checks and skips gracefully. versionCode must +1
         // with every release so signed APKs install over the previous ones.
-        versionCode = 14
-        versionName = "2.0.5"
+        versionCode = 18
+        versionName = "2.0.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en")
@@ -50,9 +50,10 @@ android {
     }
 
     // Per-ABI APKs for the release channel (plus the universal one).
-    // NetPilot ships ZERO native code, so every APK runs on every CPU —
-    // the splits exist for store-style listings; the UNIVERSAL APK
-    // remains the recommended download.
+    // NetPilot carries exactly ONE native component: the embedded WireGuard
+    // userspace engine (official tunnel library) — so the per-ABI splits now
+    // also save real download size; the UNIVERSAL APK remains the
+    // recommended download.
     splits {
         abi {
             // Enabled only for APK builds: ./gradlew :app:assembleRelease -PabiSplits
@@ -86,6 +87,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required by the embedded WireGuard tunnel library (official).
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "17"
@@ -107,6 +110,9 @@ android {
     }
 
     lint {
+        // Local low-RAM sandboxes: -PskipReleaseLint skips lintVital inside
+        // assembleRelease (CI always runs it; lintDebug gates everything).
+        checkReleaseBuilds = !project.hasProperty("skipReleaseLint")
         abortOnError = true
         checkReleaseBuilds = true
         warningsAsErrors = false
@@ -121,6 +127,9 @@ android {
 dependencies {
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
+    // ---- Embedded WireGuard engine (official tunnel library, Apache-2.0) ---
+    implementation("com.wireguard.android:tunnel:1.0.20230706")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
     // ---- Runtime: first-party Android only --------------------------------
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

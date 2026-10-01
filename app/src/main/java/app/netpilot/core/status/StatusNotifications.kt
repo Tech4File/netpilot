@@ -16,6 +16,7 @@ import app.netpilot.core.dns.PrivateDnsManager
 import app.netpilot.core.vpn.NetPilotVpnService
 import app.netpilot.core.vpn.SecureDnsVpnService
 import app.netpilot.core.vpn.VpnSessionState
+import app.netpilot.core.vpn.WireGuardRuntime
 
 /**
  * The ONE status notification for everything NetPilot keeps active.
@@ -51,6 +52,8 @@ object StatusNotifications {
         val vpnName = when {
             NetPilotVpnService.isRunning ->
                 NetPilotVpnService.runningSession ?: appContext.getString(R.string.app_name)
+            WireGuardRuntime.isRunning ->
+                WireGuardRuntime.runningName ?: appContext.getString(R.string.app_name)
             VpnSessionState.platformSessionActive(appContext) ->
                 VpnSessionState.platformProfileName(appContext) ?: appContext.getString(R.string.app_name)
             else -> null
@@ -195,8 +198,9 @@ object StatusNotifications {
         val appContext = context.applicationContext
         val dnsOn = PrivateDnsManager.read(appContext).mode == DnsMode.CUSTOM
         val platform = VpnSessionState.platformSessionActive(appContext)
+        val wg = WireGuardRuntime.isRunning
         val classicHosting = NetPilotVpnService.isRunning || SecureDnsVpnService.runningHostname != null
-        val shouldRun = (dnsOn || platform) && !classicHosting
+        val shouldRun = (dnsOn || platform || wg) && !classicHosting
         when {
             shouldRun && !VpnStatusService.running -> VpnStatusService.start(appContext)
             !shouldRun && VpnStatusService.running -> VpnStatusService.stop(appContext)

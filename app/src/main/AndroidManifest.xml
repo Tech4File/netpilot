@@ -37,6 +37,18 @@
         <provider android:authorities="rikka.shizuku.provider" />
     </queries>
 
+    <!-- OpenVPN engine apps: NetPilot hands profiles to the official engine
+         (de.blinkt.openvpn) and detects OpenVPN Connect. Visibility is
+         required to query/install-check them on API 30+. -->
+    <queries>
+        <package android:name="de.blinkt.openvpn" />
+        <package android:name="net.openvpn.openvpn" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/x-openvpn-profile" />
+        </intent>
+    </queries>
+
     <application
         android:name=".NetPilotApp"
         android:allowBackup="false"
@@ -64,6 +76,10 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The embedded WireGuard engine's VpnService is declared by the
+             official tunnel library's own manifest (BIND_VPN_SERVICE-
+             protected) — the engine runs inside NetPilot, one app total. -->
 
         <!-- Shizuku provider bridge (only used when the user opts in via Shizuku) -->
         <provider
@@ -122,5 +138,17 @@
         <receiver
             android:name=".core.status.StatusActionReceiver"
             android:exported="false" />
+
+        <!-- Hand-off area: .ovpn files sent to the engine app for import.
+             Exported=false; read access is granted per-intent at hand-off. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.enginehandoff"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

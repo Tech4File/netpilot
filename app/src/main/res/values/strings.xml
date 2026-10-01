@@ -229,4 +229,50 @@
     <string name="notif_both_text_secure">Secure DNS: %1$s · Private DNS: %2$s</string>
     <string name="notif_action_turn_off">Turn off</string>
     <string name="notif_turned_off_toast">NetPilot protection turned off</string>
+
+    <!-- v2.0.6 — OpenVPN engine bridge (working VPN path on Android 9/10) -->
+    <string name="engine_bridge_title">Connect via engine app</string>
+    <string name="engine_install_msg">The OpenVPN protocol engine is not bundled with NetPilot — it is the one big native component NetPilot deliberately leaves to the official open-source app. Install \"OpenVPN for Android\" once (free, open-source): NetPilot then hands it your profile and drives connect/disconnect.\n\nThis is the only way an Android 9/10 app can run OpenVPN — the platform IKEv2 API needs Android 11+.</string>
+    <string name="engine_install_btn">Install engine app</string>
+    <string name="engine_import_btn">Send profile to engine</string>
+    <string name="engine_connect_btn">Connect via engine</string>
+    <string name="engine_import_hint">Step 1 — Send the profile: the engine app opens with its import screen. Confirm the profile name \"%1$s\" there and keep it unchanged, so NetPilot can connect to it later.</string>
+    <string name="engine_connect_hint">Step 2 — Connect: NetPilot asks the engine to connect profile \"%1$s\". Android asks for VPN permission once.</string>
+    <string name="engine_handoff_ok">Profile sent — confirm the import in the engine app</string>
+    <string name="engine_handoff_failed">Could not open the engine app — install or update \"OpenVPN for Android\" first</string>
+    <string name="engine_connect_sent">Connect request sent to the engine app</string>
+    <string name="engine_connect_missing">The engine did not answer — send the profile first (Step 1), then connect</string>
+    <string name="vpn_status_engine">Engine VPN active</string>
+    <string name="state_engine_vpn">Engine VPN (OpenVPN app)</string>
+    <string name="engine_room_toast">NetPilot\'s own tunnel was stopped — Android allows one VPN at a time</string>
+
+    <!-- v2.0.7 — embedded WireGuard engine (one-app VPN on Android 9/10) -->
+    <string name="vpn_type_wireguard">WireGuard</string>
+    <string name="btn_import_wg">Import WireGuard .conf</string>
+    <string name="wg_imported_ok">WireGuard config imported</string>
+    <string name="err_wg_needs_config">WireGuard profiles need an imported .conf (tap Import above)</string>
+    <string name="err_wg_invalid">That file is not a usable WireGuard config (needs [Interface] with PrivateKey and [Peer] with Endpoint)</string>
+    <string name="wg_connecting_toast">Connecting WireGuard tunnel…</string>
+    <string name="wg_started_toast">WireGuard connected — %1$s</string>
+    <string name="wg_err_start_failed">WireGuard tunnel failed to start — check the config and endpoint</string>
+    <string name="wg_err_dns">Could not resolve the tunnel endpoint host</string>
+
+    <!-- v2.0.8 — per-device type hints + OpenVPN core plan -->
+    <string name="hint_ikev2_needs_11">Platform-native IKEv2 — needs Android 11+ (not on this device). Choose WireGuard: it runs inside NetPilot on Android 9+.</string>
+    <string name="hint_ikev2_native">Platform-native IKEv2/IPsec — the OS implements the protocol.</string>
+    <string name="hint_wg_embedded">Embedded WireGuard engine — runs inside NetPilot, one app, Android 9+. Import your server\'s .conf.</string>
+    <string name="hint_ovpn_engine">OpenVPN connects through the official open-source engine app (guided import) — the embedded core is in development.</string>
+
+    <!-- v2.0.9 — WireGuard manual entry + handshake honesty -->
+    <string name="field_wg_address">Interface address (e.g. 10.2.0.2/32)</string>
+    <string name="field_wg_client_key">Client private key (Generate or paste)</string>
+    <string name="field_wg_peer_key">Server public key</string>
+    <string name="field_wg_allowed_ips">Allowed IPs (0.0.0.0/0, ::/0)</string>
+    <string name="action_wg_generate">Generate</string>
+    <string name="wg_public_key_show">Add this PUBLIC key on your server (peer):\n\n%1$s\n\nCopy it now — the private key stays in NetPilot.</string>
+    <string name="wg_key_generated">New client key generated — add its public key on the server</string>
+    <string name="wg_manual_assembled">WireGuard config built from fields</string>
+    <string name="err_wg_manual_fields">Fill address, client key, server key and Allowed IPs (or import a .conf)</string>
+    <string name="wg_handshake_ok">Connected — server handshake confirmed</string>
+    <string name="wg_no_handshake">Tunnel is up but the server has not responded yet — check keys, endpoint and port (UDP)</string>
 </resources>

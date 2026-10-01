@@ -78,6 +78,7 @@ object VpnSessionState {
     fun anySessionClaimed(context: Context): Boolean =
         NetPilotVpnService.isRunning ||
             SecureDnsVpnService.runningHostname != null ||
+            WireGuardRuntime.isRunning ||
             platformSessionActive(context)
 
     /** The tunnel NetPilot currently owns, if any. */
@@ -87,6 +88,11 @@ object VpnSessionState {
             NetPilotVpnService.isRunning -> ActiveTunnel(
                 profileId = NetPilotVpnService.runningProfileId,
                 name = NetPilotVpnService.runningSession ?: appName,
+                isPlatform = false,
+            )
+            WireGuardRuntime.isRunning -> ActiveTunnel(
+                profileId = WireGuardRuntime.runningProfileId,
+                name = WireGuardRuntime.runningName ?: appName,
                 isPlatform = false,
             )
             SecureDnsVpnService.runningHostname != null -> {

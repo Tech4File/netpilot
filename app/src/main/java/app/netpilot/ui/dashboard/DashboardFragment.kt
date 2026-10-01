@@ -13,6 +13,7 @@ import app.netpilot.core.dns.DnsProfileRepository
 import app.netpilot.core.model.DnsMode
 import app.netpilot.core.network.NetworkInfoProvider
 import app.netpilot.core.prefs.AppPreferences
+import app.netpilot.core.vpn.EngineBridge
 import app.netpilot.core.vpn.SecureDnsVpnService
 import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
@@ -154,6 +155,7 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         }
         binding.vpnQuickState.text = when {
             systemVpnActive -> getString(R.string.state_on) + " · " + (tunnel?.name ?: "—")
+            foreignVpn && EngineBridge.primaryEngineInstalled(context) -> getString(R.string.state_engine_vpn)
             foreignVpn -> getString(R.string.state_foreign_vpn)
             else -> getString(R.string.state_off)
         }

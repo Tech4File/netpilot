@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-off area for OpenVPN profiles sent to the engine app
+     (de.blinkt.openvpn) via FileProvider. App-private cache only. -->
+<paths>
+    <cache-path
+        name="engine_handoff"
+        path="engine-handoff/" />
+</paths>

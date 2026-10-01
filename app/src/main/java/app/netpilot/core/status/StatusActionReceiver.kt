@@ -13,6 +13,8 @@ import app.netpilot.core.vpn.PlatformVpnController
 import app.netpilot.core.vpn.SecureDnsVpnService
 import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
+import app.netpilot.core.vpn.WireGuardManager
+import app.netpilot.core.vpn.WireGuardRuntime
 
 /**
  * The notification's single "Turn off" action: stops exactly what the
@@ -59,6 +61,12 @@ class StatusActionReceiver : BroadcastReceiver() {
                             .setAction(NetPilotVpnService.ACTION_DISCONNECT),
                     )
                 }
+                stopped = true
+            }
+
+            // 2b) Embedded WireGuard tunnel (native turn-off, no network I/O).
+            if (WireGuardRuntime.isRunning) {
+                runCatching { WireGuardManager.get(context).disconnect() }
                 stopped = true
             }
 
