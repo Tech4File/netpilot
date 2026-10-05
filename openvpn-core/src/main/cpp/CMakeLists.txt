@@ -17,12 +17,20 @@
 cmake_minimum_required(VERSION 3.22)
 project(ovpncore CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CORE "${OVPN_CORE_DIR}")
 if(NOT EXISTS "${CORE}/client/ovpncli.cpp")
     message(FATAL_ERROR "OVPN_CORE_DIR does not contain the openvpn3 core (${CORE})")
+endif()
+
+# Standalone asio headers (header-only). The build script passes the
+# checkout's include dir; the core's own Findasio module expects exactly
+# this variable (its probe failed on "missing: ASIO_INCLUDE_DIR").
+set(ASIO_INCLUDE_DIR "" CACHE PATH "asio standalone include directory")
+if(NOT EXISTS "${ASIO_INCLUDE_DIR}/asio.hpp")
+    message(FATAL_ERROR "ASIO_INCLUDE_DIR must point at the dir containing asio.hpp (got: ${ASIO_INCLUDE_DIR})")
 endif()
 
 add_library(ovpncore SHARED
@@ -35,6 +43,7 @@ target_include_directories(ovpncore PRIVATE
     "${CORE}"
     "${CORE}/client"
     "${DEP_PREFIX}/include"
+    "${ASIO_INCLUDE_DIR}"
 )
 
 target_compile_definitions(ovpncore PRIVATE
@@ -55,4 +64,5 @@ target_link_libraries(ovpncore
     "${DEP_PREFIX}/lib/libssl.a"
     "${DEP_PREFIX}/lib/libcrypto.a"
     "${DEP_PREFIX}/lib/liblz4.a"
+    "${DEP_PREFIX}/lib/libfmt.a"
 )

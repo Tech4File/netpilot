@@ -71,10 +71,13 @@ for ABI in "${ABIS[@]}"; do
   # OpenSSL (static)
   if [ ! -f "$P/lib/libssl.a" ]; then
     echo "[ovpn] openssl ($OSSL_TARGET)"
+    # NOTE: OpenSSL 3.0 has no `no-docs` option (that arrived in 3.2) — the
+    # first engine-build failed exactly there. `install_sw` never installs
+    # docs anyway.
     (cd "$WORK/openssl-src" \
       && make clean >/dev/null 2>&1 || true \
       && ANDROID_NDK_ROOT="$NDK" ./Configure "$OSSL_TARGET" \
-           -D__ANDROID_API__=28 no-shared no-tests no-docs no-engine \
+           -D__ANDROID_API__=28 no-shared no-tests no-engine \
            --prefix="$P" \
       && make -j"$(nproc)" build_libs > /dev/null \
       && make install_sw > /dev/null)
@@ -92,14 +95,15 @@ for ABI in "${ABIS[@]}"; do
     cmake --install "$WORK/lz4-$ABI" > /dev/null
   fi
 
-  # fmt (static, CMake) — the core's CMake tooling expects it present.
+  # fmt (static, CMake) — linked defensively; the exact recipe the v2.2.1
+  # probe already configured and built on CI.
   if [ ! -f "$P/lib/libfmt.a" ]; then
     echo "[ovpn] fmt"
     cmake -S "$WORK/fmt-src" -B "$WORK/fmt-$ABI" -G Ninja \
       -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
       -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-28 \
-      -DCMAKE_BUILD_TYPE=Release -DFMT_TEST=OFF -DBUILD_SHARED_LIBS=OFF \
-      -DFMT_HEADER_ONLY=ON -DCMAKE_INSTALL_PREFIX="$P" > /dev/null
+      -DCMAKE_BUILD_TYPE=Release -DFMT_TEST=OFF -DFMT_DOC=OFF \
+      -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX="$P" > /dev/null
     cmake --build "$WORK/fmt-$ABI" > /dev/null
     cmake --install "$WORK/fmt-$ABI" > /dev/null
   fi
@@ -111,7 +115,8 @@ for ABI in "${ABIS[@]}"; do
     -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-28 \
     -DCMAKE_BUILD_TYPE=Release \
     -DOVPN_CORE_DIR="$CORE_DIR" \
-    -DDEP_PREFIX="$P"
+    -DDEP_PREFIX="$P" \
+    -DASIO_INCLUDE_DIR="$WORK/asio/asio/include"
   cmake --build "$WORK/core-$ABI"
 
   OUT="$JNILIBS/$ABI"
