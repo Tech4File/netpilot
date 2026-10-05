@@ -131,6 +131,7 @@ dependencies {
     // compiles everywhere; builds without the .so fall back to the bridge.
     implementation(project(":openvpn-core"))
     // ---- Embedded WireGuard engine (official tunnel library, Apache-2.0) ---
+    // Updated WireGuard tunnel library (1.0.20260102) with active JNI core alignment
     implementation("com.wireguard.android:tunnel:1.0.20260102")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     // ---- Runtime: first-party Android only --------------------------------
