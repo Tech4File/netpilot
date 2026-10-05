@@ -37,7 +37,7 @@ jobs:
           java-version: 17
 
       - name: Set up Gradle (cache + wrapper validation)
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           validate-wrappers: true
 
@@ -108,7 +108,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # NOTE: keep the `script` a single line — multiline inline scripts were
       # truncated by the action (see .github/scripts/run-instrumented-tests.sh).
