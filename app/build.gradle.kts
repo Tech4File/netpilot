@@ -30,8 +30,8 @@ android {
         // versionName below is NEW (no matching vX.Y.Z tag exists yet). No bump
         // => the Release run checks and skips gracefully. versionCode must +1
         // with every release so signed APKs install over the previous ones.
-        versionCode = 20
-        versionName = "2.2.0"
+        versionCode = 21
+        versionName = "2.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en")

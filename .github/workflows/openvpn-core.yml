@@ -1,13 +1,15 @@
 name: OpenVPN core probe
 
-# EXPERIMENTAL PROBE (v2.2.0) — manual dispatch ONLY, so it costs zero CI
-# minutes unless someone triggers it. Goal: learn whether the vendored
-# openvpn3-android core (source-only, see scripts/vendor-openvpn-core.sh)
-# configures and compiles for arm64-v8a with the current NDK, and capture the
-# build log. This does NOT ship anything: the embedded engine joins the app
-# only when a real tunnel is proven (docs/OPENVPN_CORE.md).
+# EXPERIMENTAL PROBE (v2.2.1) — manual dispatch ONLY, so it costs zero CI
+# minutes unless someone triggers it.
 #
-# Until this probe passes, OpenVPN profiles keep using the sanctioned bridge.
+# v2.2.1 notes: the first probe failed in the vendor step because it cloned
+# github.com/openvpn/openvpn3-android — a repo that does not exist (404 →
+# git asked for credentials). This version vendors the REAL upstream core
+# (openvpn/openvpn3) and then cross-builds its dependencies for arm64-v8a
+# with the NDK, mirroring what the future :openvpn-core Gradle module must
+# do. Everything is continue-on-error: the artifact logs ARE the deliverable
+# that drives the next iteration. Nothing ships from this workflow.
 
 on:
   workflow_dispatch:
@@ -28,10 +30,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync pkg-config cmake ninja-build
+
       - name: Vendor OpenVPN core sources (source-only, pinned ref)
         run: |
           chmod +x scripts/vendor-openvpn-core.sh
-          scripts/vendor-openvpn-core.sh openvpn-core-src
+          scripts/vendor-openvpn-core.sh "$PWD/core-src"
 
       - name: Set up Android NDK
         uses: nttld/setup-ndk@v1
@@ -39,19 +46,70 @@ jobs:
         with:
           ndk-version: r27c
 
-      - name: CMake configure + build probe (arm64-v8a)
-        continue-on-error: true   # probe: capture results, never fail the run
+      # Dependency layout the core's CMake expects:
+      #   DEP_DIR/asio/asio/...        (asio repo root contains an asio/ dir)
+      # plus cross-built libs in a prefix found via CMAKE_PREFIX_PATH /
+      # PKG_CONFIG_PATH: mbedtls (USE_MBEDTLS), lz4, fmt.
+      - name: Fetch core dependencies
         run: |
-          echo "Vendored tree layout:" | tee probe-configure.log
-          find openvpn-core-src -name "CMakeLists.txt" -o -name "*.cmake" | head -30 | tee -a probe-configure.log
-          if [ ! -f openvpn-core-src/CMakeLists.txt ]; then
-            echo "No root CMakeLists — the next probe iteration must author the :openvpn-core module CMake against the discovered sources." | tee -a probe-configure.log
-          fi
-          cmake -S openvpn-core-src -B /tmp/ovpn-build \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
-            -DCMAKE_BUILD_TYPE=Release 2>&1 | tee -a probe-configure.log || true
-          cmake --build /tmp/ovpn-build 2>&1 | tee probe-build.log || true
+          mkdir -p deps prefix
+          git clone --depth 1 -b master https://github.com/chriskohlhoff/asio.git deps/asio
+          git clone --depth 1 -b v3.6.5 https://github.com/ARMmbed/mbedtls.git deps/mbedtls-src
+          git clone --depth 1 -b v1.10.0 https://github.com/lz4/lz4.git deps/lz4-src
+          git clone --depth 1 -b 11.1.1 https://github.com/fmtlib/fmt.git deps/fmt-src
+          echo "NDK=$PWD/deps layout ready"
+
+      - name: Cross-build mbedtls (arm64-v8a)
+        continue-on-error: true
+        run: |
+          TC=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
+          cmake -S deps/mbedtls-src -B /tmp/mb -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$TC -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$PWD/prefix 2>&1 | tee mbedtls-configure.log
+          cmake --build /tmp/mb 2>&1 | tee mbedtls-build.log
+          cmake --install /tmp/mb 2>&1 | tee mbedtls-install.log
+
+      - name: Cross-build lz4 (arm64-v8a)
+        continue-on-error: true
+        run: |
+          TC=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
+          cmake -S deps/lz4-src/build/cmake -B /tmp/lz4 -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$TC -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$PWD/prefix 2>&1 | tee lz4-configure.log
+          cmake --build /tmp/lz4 2>&1 | tee lz4-build.log
+          cmake --install /tmp/lz4 2>&1 | tee lz4-install.log
+
+      - name: Cross-build fmt (arm64-v8a)
+        continue-on-error: true
+        run: |
+          TC=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
+          cmake -S deps/fmt-src -B /tmp/fmt -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$TC -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_BUILD_TYPE=Release -DFMT_TEST=OFF -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$PWD/prefix 2>&1 | tee fmt-configure.log
+          cmake --build /tmp/fmt 2>&1 | tee fmt-build.log
+          cmake --install /tmp/fmt 2>&1 | tee fmt-install.log
+
+      - name: Configure the core (arm64-v8a)
+        continue-on-error: true
+        run: |
+          export DEP_DIR=$PWD/deps
+          export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig:$PWD/prefix/lib64/pkgconfig
+          TC=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
+          cmake -S core-src -B /tmp/ovpn-build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=$TC -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_BUILD_TYPE=Release -DUSE_MBEDTLS=ON \
+            -DCMAKE_PREFIX_PATH=$PWD/prefix \
+            -DCMAKE_FIND_ROOT_PATH=$PWD/prefix \
+            2>&1 | tee core-configure.log || true
+
+      - name: Build ovpncli client library (arm64-v8a)
+        continue-on-error: true
+        run: |
+          cmake --build /tmp/ovpn-build --target ovpncli 2>&1 | tee core-build.log || true
+          find /tmp/ovpn-build -name "*.so" -o -name "*.a" | tee core-artifacts.log || true
 
       - name: Upload probe logs
         if: always()
@@ -59,6 +117,8 @@ jobs:
         with:
           name: openvpn-core-probe-logs
           path: |
-            probe-configure.log
-            probe-build.log
+            *-configure.log
+            *-build.log
+            *-install.log
+            core-artifacts.log
           if-no-files-found: warn

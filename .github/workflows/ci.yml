@@ -30,6 +30,15 @@ jobs:
       - name: Ensure gradlew is executable
         run: chmod +x gradlew
 
+      # The repo gradle.properties is tuned for 2 GB sandboxes; CI runners
+      # have headroom, and one persistent daemon serves all the steps below
+      # (unit tests, lint, two assembles) — give it real memory so the
+      # fourth invocation cannot exhaust the heap (v2.2.1 fix).
+      - name: Configure Gradle memory for CI
+        run: |
+          echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -XX:+UseG1GC -Dfile.encoding=UTF-8" >> gradle.properties
+          echo "kotlin.daemon.jvmargs=-Xmx1500m" >> gradle.properties
+
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
@@ -89,6 +98,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure Gradle memory for CI
+        run: |
+          echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m -XX:+UseG1GC -Dfile.encoding=UTF-8" >> gradle.properties
+          echo "kotlin.daemon.jvmargs=-Xmx1500m" >> gradle.properties
 
       - name: Ensure gradlew & CI scripts are executable
         run: |

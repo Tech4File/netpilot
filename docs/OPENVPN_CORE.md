@@ -25,8 +25,21 @@ toggle — unacceptable.
 
 1. **Vendor sources (source-only, never binaries):** run
    `scripts/vendor-openvpn-core.sh openvpn-core/src <pinned-ref>` —
-   it fetches the `openvpn3-android` core sources (AGPL-3.0) and drops a
+   it fetches the **OpenVPN 3 C++ core** (AGPL-3.0) and drops a
    license note; the CI NDK job builds them.
+   *Upstream reality (verified via the GitHub API, v2.2.1):*
+   - `github.com/openvpn/openvpn3` — the actual C++ core; ships its own
+     CMake (`CMakeLists.txt`, `cmake/findcoredeps.cmake`, target
+     `ovpncli`), default branch `master`. THIS is what we vendor.
+   - `github.com/openvpn/openvpn3-android` — DOES NOT EXIST (404). The
+     first CI probe failed exactly here; do not reference it again.
+   - `github.com/schwabe/ics-openvpn` — "OpenVPN for Android" (AGPL),
+     builds the core via `main/src/main/cpp/CMakeLists.txt` — our
+     reference integration.
+   - The core's CMake needs `DEP_DIR` (default `<core>/../deps`) with
+     `asio/asio/` headers, plus mbedtls (USE_MBEDTLS), lz4 and fmt
+     found via `CMAKE_PREFIX_PATH` / `PKG_CONFIG_PATH` — all
+     cross-built in the probe workflow before configuring the core.
 2. **Module:** new `:openvpn-core` Android library; CMake + NDK r27;
    ABIs arm64-v8a, armeabi-v7a, x86, x86_64; minSdk 28.
 3. **JNI bridge:** implement the existing `core.vpn.VpnDataChannel`
@@ -53,3 +66,17 @@ vendors the sources on GitHub infra and attempts a CMake configure+build for
 arm64-v8a with NDK r27, uploading the logs as an artifact. Iterate on the
 `:openvpn-core` module CMake against those logs; the bridge stays until a
 real tunnel connects.
+
+## Probe history (facts, not claims)
+
+- **Probe 1 (v2.2.0): FAILED in the vendor step** — cloned the
+  nonexistent `openvpn/openvpn3-android` (404 → git credential prompt).
+  No compilation was attempted; nothing was learned about the toolchain.
+- **Probe 2 (v2.2.1): rewritten** — vendors `openvpn/openvpn3` (verified
+  reachable; the vendor script was executed end-to-end in the dev
+  sandbox: 786 files, 12 MB source, licenses intact), then cross-builds
+  asio/mbedtls/lz4/fmt for arm64-v8a with NDK r27 and configures the
+  core's own CMake with `-DUSE_MBEDTLS=ON`, building the `ovpncli`
+  client library. Every step is continue-on-error: the uploaded logs are
+  the input for the next iteration. The bridge stays until a real
+  tunnel connects.
