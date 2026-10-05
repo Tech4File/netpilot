@@ -8,11 +8,13 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import app.netpilot.MainActivity
 import app.netpilot.R
+import app.netpilot.core.access.AccessGuard
 import app.netpilot.core.dns.PrivateDnsManager
 import app.netpilot.core.dns.DnsProfileRepository
 import app.netpilot.core.model.DnsMode
 import app.netpilot.core.network.NetworkInfoProvider
 import app.netpilot.core.prefs.AppPreferences
+import app.netpilot.core.shizuku.ShizukuGranter
 import app.netpilot.core.vpn.EngineBridge
 import app.netpilot.core.vpn.SecureDnsVpnService
 import app.netpilot.core.vpn.VpnSessionState
@@ -33,6 +35,9 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
     private lateinit var prefs: AppPreferences
     private lateinit var dnsRepo: DnsProfileRepository
     private var dnsObserver: ContentObserver? = null
+
+    /** Once-per-process guard so the access-lost prompt can't nag-loop. */
+    private var regrantPrompted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,16 +61,37 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         binding.btnInfo.setOnClickListener {
             SetupDialogs.showPermissionGuide(requireActivity() as MainActivity) { refresh() }
         }
-        // First-launch only: auto-show the guide when permission is missing.
-        // Closed == acknowledged; afterwards the (i) button is the way back.
+        // Access lifecycle (v2.2.0): true first launch shows the guide once;
+        // if access is LOST later — TV restart with a Shizuku-only setup
+        // (Shizuku is a process and dies on every power cycle), app data
+        // cleared, factory reset — the SAME guide re-appears automatically
+        // with the access-lost wording, exactly like the very first open.
         // Suppressed on emulator-like devices so automated UI tests start from
         // a clean window (real devices are unaffected).
-        if (!isEmulatorLike() &&
-            !PrivateDnsManager.hasWritePermission(requireContext()) &&
-            !prefs.setupGuideShown
-        ) {
-            prefs.setupGuideShown = true
-            SetupDialogs.showPermissionGuide(requireActivity() as MainActivity) { refresh() }
+        val adbGrant = PrivateDnsManager.hasWritePermission(requireContext())
+        val shizukuUsable = ShizukuGranter.permissionGranted()
+        if (adbGrant || shizukuUsable) prefs.accessHeld = true
+        if (!isEmulatorLike()) {
+            val status = AccessGuard.evaluate(
+                AccessGuard.Inputs(
+                    adbGrant = adbGrant,
+                    shizukuUsable = shizukuUsable,
+                    setupGuideShown = prefs.setupGuideShown,
+                    accessHeldBefore = prefs.accessHeld,
+                ),
+            )
+            // Prompt at most once per app open — the setup card and the (i)
+            // button stay as the always-visible recovery paths.
+            if (!regrantPrompted &&
+                (status == AccessGuard.AccessStatus.ONBOARD || status == AccessGuard.AccessStatus.REGRANT)
+            ) {
+                regrantPrompted = true
+                prefs.setupGuideShown = true
+                SetupDialogs.showPermissionGuide(
+                    requireActivity() as MainActivity,
+                    accessLost = status == AccessGuard.AccessStatus.REGRANT,
+                ) { refresh() }
+            }
         }
         binding.advisoryCard.setOnClickListener {
             prefs.dnsVpnAdvisoryDismissed = true

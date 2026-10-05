@@ -90,6 +90,18 @@ No computer? Install Termux on any Android phone → `pkg install android-tools`
 
 ### Also on board
 - **Dashboard**: protection state hero, quick toggles, live network facts (interface, effective DNS)
+- **Quick Settings tiles**: one-tap Private DNS **and** VPN toggles from the shade — boundaryless,
+  run only while the shade is open (Android 9+; subtitles on 10+)
+- **Per-app VPN** (WireGuard): include/exclude which apps use the tunnel — written into the
+  profile's `.conf` as `IncludedApplications`/`ExcludedApplications`, applied natively by the engine
+- **Restart-proof access**: the ADB grant survives TV power cycles; if access is ever lost
+  (Shizuku-only setup after a restart, cleared data), the first-launch guide re-appears
+  automatically with the fix (see `docs/ACCESS-PERSISTENCE.md`)
+- **Optional boot reconnect** (Settings, default off): one reconnect attempt at power-on for the
+  embedded WireGuard tunnel — no background retry loops
+- **App shortcuts**: long-press the icon → Private DNS / VPN
+- **Zero-dormancy battery**: when nothing is protecting, nothing runs or listens — no background
+  services, listeners, polling, or wake locks (see `docs/PERFORMANCE.md`)
 - **Settings**: theme (system/light/dark), permission status, profile export/import (JSON via SAF),
   privacy statement, in-app open-source licenses
 - Advisory (not a blocker) when **VPN + strict Private DNS** run together — they *can* coexist;

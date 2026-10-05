@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import app.netpilot.R
 import app.netpilot.core.model.VpnProfile
+import app.netpilot.core.prefs.AppPreferences
 import com.wireguard.android.backend.BackendException
 import com.wireguard.android.backend.GoBackend
 import com.wireguard.android.backend.Tunnel
@@ -134,6 +135,7 @@ class WireGuardManager private constructor(context: Context) {
         val tunnel = currentTunnel
         if (tunnel == null) {
             WireGuardRuntime.markStopped()
+            AppPreferences(appContext).vpnWasActiveEmbeddedWg = false
             main.post { onDone() }
             return
         }
@@ -142,6 +144,7 @@ class WireGuardManager private constructor(context: Context) {
             main.post {
                 currentTunnel = null
                 WireGuardRuntime.markStopped()
+                AppPreferences(appContext).vpnWasActiveEmbeddedWg = false
                 onDone()
             }
         }.start()

@@ -23,9 +23,10 @@ toggle — unacceptable.
 
 ## Phase 2 — embedded core, concrete steps
 
-1. **Vendor sources (source-only, never binaries):** `openvpn3-android`
-   core (github.com/openvpn/openvpn3-android, AGPL-3.0) into
-   `openvpn-core/src/` — committed as source, built by CI.
+1. **Vendor sources (source-only, never binaries):** run
+   `scripts/vendor-openvpn-core.sh openvpn-core/src <pinned-ref>` —
+   it fetches the `openvpn3-android` core sources (AGPL-3.0) and drops a
+   license note; the CI NDK job builds them.
 2. **Module:** new `:openvpn-core` Android library; CMake + NDK r27;
    ABIs arm64-v8a, armeabi-v7a, x86, x86_64; minSdk 28.
 3. **JNI bridge:** implement the existing `core.vpn.VpnDataChannel`
@@ -44,3 +45,11 @@ toggle — unacceptable.
 
 Until phase 2 lands, WireGuard (embedded, one app) and the OpenVPN
 engine bridge keep every supported device working.
+
+## Probe (v2.2.0)
+
+`openvpn-core.yml` (workflow_dispatch only — zero CI minutes until triggered)
+vendors the sources on GitHub infra and attempts a CMake configure+build for
+arm64-v8a with NDK r27, uploading the logs as an artifact. Iterate on the
+`:openvpn-core` module CMake against those logs; the bridge stays until a
+real tunnel connects.

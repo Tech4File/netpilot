@@ -30,8 +30,8 @@ android {
         // versionName below is NEW (no matching vX.Y.Z tag exists yet). No bump
         // => the Release run checks and skips gracefully. versionCode must +1
         // with every release so signed APKs install over the previous ones.
-        versionCode = 18
-        versionName = "2.0.9"
+        versionCode = 20
+        versionName = "2.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en")
@@ -114,7 +114,6 @@ android {
         // assembleRelease (CI always runs it; lintDebug gates everything).
         checkReleaseBuilds = !project.hasProperty("skipReleaseLint")
         abortOnError = true
-        checkReleaseBuilds = true
         warningsAsErrors = false
         disable += listOf("GradleDependency", "GoogleAppIndexingWarning")
     }

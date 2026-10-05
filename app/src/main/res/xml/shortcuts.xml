@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static app shortcuts (v2.2.0): long-press the NetPilot icon.
+     Static = zero background cost; the extras route to the tab via
+     MainActivity.handleLaunchIntent (values match NavTab.ordinal). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_dns"
+        android:shortcutDisabledMessage="@string/shortcut_disabled"
+        android:shortcutId="dns"
+        android:shortcutLongLabel="@string/shortcut_dns_long"
+        android:shortcutShortLabel="@string/shortcut_dns_short">
+        <intent
+            android:action="app.netpilot.action.SHORTCUT"
+            android:targetClass="app.netpilot.MainActivity"
+            android:targetPackage="app.netpilot">
+            <extra
+                android:name="shortcut_tab"
+                android:value="1" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_vpn"
+        android:shortcutDisabledMessage="@string/shortcut_disabled"
+        android:shortcutId="vpn"
+        android:shortcutLongLabel="@string/shortcut_vpn_long"
+        android:shortcutShortLabel="@string/shortcut_vpn_short">
+        <intent
+            android:action="app.netpilot.action.SHORTCUT"
+            android:targetClass="app.netpilot.MainActivity"
+            android:targetPackage="app.netpilot">
+            <extra
+                android:name="shortcut_tab"
+                android:value="2" />
+        </intent>
+    </shortcut>
+</shortcuts>

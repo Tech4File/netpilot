@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -69,6 +70,7 @@ class SettingsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.rowTheme.setOnClickListener { showThemeDialog() }
+        binding.rowReconnect.setOnClickListener { toggleReconnect() }
         binding.rowSecurity.setOnClickListener {
             SetupDialogs.showPermissionGuide(requireActivity() as AppCompatActivity) { refresh() }
         }
@@ -104,6 +106,19 @@ class SettingsFragment : Fragment() {
         binding.rowSecurity.setValue(getString(if (granted) R.string.security_value_granted else R.string.security_value_missing))
         binding.rowSecurity.setValueColorRes(if (granted) R.color.status_success else R.color.status_warning)
         binding.rowTheme.setValue(getString(prefs.theme.labelRes))
+        binding.rowReconnect.setValue(
+            getString(if (prefs.reconnectOnBoot) R.string.row_reconnect_value_on else R.string.row_reconnect_value_off),
+        )
+    }
+
+    private fun toggleReconnect() {
+        prefs.reconnectOnBoot = !prefs.reconnectOnBoot
+        refresh()
+        Toast.makeText(
+            requireContext(),
+            if (prefs.reconnectOnBoot) R.string.row_reconnect_value_on else R.string.row_reconnect_value_off,
+            Toast.LENGTH_SHORT,
+        ).show()
     }
 
     private fun showThemeDialog() {

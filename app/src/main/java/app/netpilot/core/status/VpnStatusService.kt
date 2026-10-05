@@ -4,9 +4,13 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.database.ContentObserver
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.ServiceCompat
+import app.netpilot.core.dns.PrivateDnsManager
 
 /**
  * Standalone foreground host for the unified status notification — used when
@@ -18,9 +22,18 @@ class VpnStatusService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private var selfCheckObserver: ContentObserver? = null
+
     override fun onCreate() {
         super.onCreate()
         running = true
+        // Battery model: the service exists ONLY to host the status
+        // notification. Watch the system DNS setting (cheap, in-process,
+        // no wake locks): if its reason disappears while we run (user
+        // switched Private DNS off from the SYSTEM settings), stop ourselves.
+        selfCheckObserver = PrivateDnsManager.observe(this) {
+            StatusNotifications.reconcileStatusService(this)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -49,6 +62,8 @@ class VpnStatusService : Service() {
     }
 
     override fun onDestroy() {
+        selfCheckObserver?.let { PrivateDnsManager.stopObserving(this, it) }
+        selfCheckObserver = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         running = false
         super.onDestroy()

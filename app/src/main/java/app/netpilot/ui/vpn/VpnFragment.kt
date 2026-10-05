@@ -28,6 +28,7 @@ import app.netpilot.core.vpn.WgConfigCheck
 import app.netpilot.core.vpn.WireGuardConfBuilder
 import app.netpilot.core.vpn.WireGuardManager
 import app.netpilot.core.vpn.WireGuardRuntime
+import app.netpilot.core.vpn.WireGuardSplitTunnel
 import app.netpilot.databinding.DialogVpnProfileBinding
 import app.netpilot.databinding.FragmentVpnBinding
 import app.netpilot.ui.components.SegmentedToggle
@@ -50,6 +51,9 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
     private var pendingWgProfile: VpnProfile? = null
     private var suppressUiCallbacks = false
     private var editing: VpnProfile? = null
+
+    /** Per-app (split tunnel) selection being edited in the open dialog. */
+    private var perAppSelection: WireGuardSplitTunnel.Selection? = null
     private val connectWatchdog = Handler(Looper.getMainLooper())
 
     /** True while the watchdog is armed (a platform TUN is expected to appear). */
@@ -473,6 +477,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
 
     fun showProfileDialog(existing: VpnProfile?) {
         editing = existing
+        perAppSelection = null
         val dialogBinding = DialogVpnProfileBinding.inflate(layoutInflater)
         val segment = dialogBinding.vpnTypeSegment
 
@@ -509,6 +514,12 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             if (wgSection && dialogBinding.etWgAllowedIps.text.isNullOrBlank()) {
                 dialogBinding.etWgAllowedIps.setText("0.0.0.0/0, ::/0")
             }
+            // Per-app VPN (v2.2.0): only for saved WireGuard profiles — the
+            // selection edits the existing .conf.
+            val perAppUsable = wgSection && editing?.wgConfig != null
+            dialogBinding.btnPerApp.visibility = if (perAppUsable) View.VISIBLE else View.GONE
+            dialogBinding.tvPerApp.visibility = if (perAppUsable) View.VISIBLE else View.GONE
+            updatePerAppCaption(dialogBinding)
             dialogBinding.btnImportOvpn.visibility = View.VISIBLE
             dialogBinding.tilUsername.visibility =
                 if (type == VpnType.PLATFORM_IKEV2) View.VISIBLE else View.GONE
@@ -545,6 +556,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         renderFields(initialType)
 
         // On-device client key generation for the manual (own-server) flow.
+        dialogBinding.btnPerApp.setOnClickListener { showPerAppDialog() }
         dialogBinding.btnWgGenerate.setOnClickListener {
             val (priv, pub) = WireGuardConfBuilder.generateKeyPair()
             dialogBinding.etWgClientKey.setText(priv)
@@ -700,6 +712,83 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             toast(getString(R.string.wg_imported_ok))
         }
 
+    // ---- Per-app (split) tunneling, v2.2.0 -------------------------------
+
+    private fun updatePerAppCaption(dialogBinding: DialogVpnProfileBinding) {
+        val sel = perAppSelection ?: editing?.wgConfig?.let { WireGuardSplitTunnel.read(it) }
+        dialogBinding.tvPerApp.text = when (sel?.mode) {
+            WireGuardSplitTunnel.Mode.INCLUDE ->
+                getString(R.string.per_app_count, sel.packages.size) + " · " + getString(R.string.per_app_mode_include)
+            WireGuardSplitTunnel.Mode.EXCLUDE ->
+                getString(R.string.per_app_count, sel.packages.size) + " · " + getString(R.string.per_app_mode_exclude)
+            else -> getString(R.string.per_app_mode_all)
+        }
+    }
+
+    /**
+     * Multi-select picker. Decisive save buttons instead of a mode radio:
+     * "Exclude selected" and "Include selected" — WireGuard permits exactly
+     * one of the two, so the UI can't produce a contradictory config.
+     */
+    private fun showPerAppDialog() {
+        val conf = editing?.wgConfig ?: return
+        val apps = launchableApps()
+        if (apps.isEmpty()) {
+            toast(getString(R.string.per_app_none))
+            return
+        }
+        val current = perAppSelection ?: WireGuardSplitTunnel.read(conf)
+        val checked = apps.map { it.first in current.packages }.toBooleanArray()
+        val labels = apps.map { it.second }.toTypedArray()
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.per_app_title)
+            .setMessage(R.string.per_app_hint)
+            .setMultiChoiceItems(labels, checked) { _, _, _ -> }
+            .setPositiveButton(R.string.per_app_exclude) { d, _ ->
+                val picked = pickedPackages(d as androidx.appcompat.app.AlertDialog, apps)
+                if (picked.isEmpty()) {
+                    perAppSelection = WireGuardSplitTunnel.Selection(WireGuardSplitTunnel.Mode.ALL, emptyList())
+                } else {
+                    perAppSelection = WireGuardSplitTunnel.Selection(WireGuardSplitTunnel.Mode.EXCLUDE, picked)
+                }
+                activeVpnDialogBinding?.let { updatePerAppCaption(it) }
+            }
+            .setNeutralButton(R.string.per_app_include) { d, _ ->
+                val picked = pickedPackages(d as androidx.appcompat.app.AlertDialog, apps)
+                if (picked.isEmpty()) {
+                    perAppSelection = WireGuardSplitTunnel.Selection(WireGuardSplitTunnel.Mode.ALL, emptyList())
+                } else {
+                    perAppSelection = WireGuardSplitTunnel.Selection(WireGuardSplitTunnel.Mode.INCLUDE, picked)
+                }
+                activeVpnDialogBinding?.let { updatePerAppCaption(it) }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun pickedPackages(dialog: androidx.appcompat.app.AlertDialog, apps: List<Pair<String, String>>): List<String> {
+        val lv = dialog.listView
+        return apps.filterIndexed { i, _ -> lv.isItemChecked(i) }.map { it.first }
+    }
+
+    /** Launchable user apps (D-pad friendly labels, alphabetical). */
+    private fun launchableApps(): List<Pair<String, String>> {
+        val pm = requireContext().packageManager
+        val main = android.content.Intent(android.content.Intent.ACTION_MAIN)
+            .addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        return runCatching {
+            pm.queryIntentActivities(main, 0)
+                .mapNotNull { ri ->
+                    val pkg = ri.activityInfo?.applicationInfo?.packageName ?: return@mapNotNull null
+                    if (pkg == requireContext().packageName) return@mapNotNull null
+                    pkg to (ri.loadLabel(pm)?.toString().orEmpty().ifBlank { pkg })
+                }
+                .distinctBy { it.first }
+                .sortedBy { it.second.lowercase() }
+        }.getOrDefault(emptyList())
+    }
+
     private fun saveProfile(
         dialogBinding: DialogVpnProfileBinding,
         type: VpnType,
@@ -764,6 +853,20 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             } else if (!WgConfigCheck.isPlausible(wgConf)) {
                 dialogBinding.tilServer.error = getString(R.string.err_wg_invalid)
                 valid = false
+            }
+            // Per-app selection (v2.2.0): write Included/ExcludedApplications
+            // into the conf. Invalid selection → save blocked, honest error.
+            perAppSelection?.let { sel ->
+                val source = wgConf ?: editing?.wgConfig
+                if (source != null) {
+                    val applied = WireGuardSplitTunnel.apply(source, sel)
+                    if (applied == null) {
+                        dialogBinding.tilServer.error = getString(R.string.err_per_app)
+                        valid = false
+                    } else {
+                        wgConf = applied
+                    }
+                }
             }
         }
 

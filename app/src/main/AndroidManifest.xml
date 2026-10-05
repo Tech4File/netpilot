@@ -19,6 +19,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Optional "Reconnect VPN after restart" (Settings, default OFF).
+         Protected system broadcast — the receiver runs once per power-on. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- The app is designed for Android TV but must also install on phones/tablets. -->
     <uses-feature
@@ -49,6 +52,15 @@
         </intent>
     </queries>
 
+    <!-- Per-app VPN (v2.2.0): the picker lists LAUNCHABLE apps. This intent
+         visibility query is what makes them discoverable on Android 10+. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".NetPilotApp"
         android:allowBackup="false"
@@ -75,6 +87,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- Static app shortcuts (long-press icon): zero background cost. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- The embedded WireGuard engine's VpnService is declared by the
@@ -138,6 +154,44 @@
         <receiver
             android:name=".core.status.StatusActionReceiver"
             android:exported="false" />
+
+        <!-- Quick Settings tile (one-tap Private DNS toggle). Boundaryless:
+             the system binds it only while visible/tapped — zero background
+             footprint (see docs/PERFORMANCE.md). -->
+        <service
+            android:name=".core.tiles.DnsTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_dns"
+            android:label="@string/tile_dns_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Quick Settings tile (one-tap VPN toggle, v2.2.0). Boundaryless
+             like the DNS tile. -->
+        <service
+            android:name=".core.tiles.VpnTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_vpn"
+            android:label="@string/tile_vpn_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- One-shot reconnect of the last embedded WireGuard tunnel after a
+             restart (Settings opt-in, default OFF). Fires ONCE per power-on:
+             no scheduler, no retry, no listening afterwards. -->
+        <receiver
+            android:name=".core.boot.BootReconnectReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Hand-off area: .ovpn files sent to the engine app for import.
              Exported=false; read access is granted per-intent at hand-off. -->

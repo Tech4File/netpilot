@@ -56,6 +56,13 @@
             app:npIcon="@drawable/ic_verified"
             app:npTitle="@string/row_security" />
 
+        <app.netpilot.ui.components.SettingRow
+            android:id="@+id/row_reconnect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:npIcon="@drawable/ic_vpn"
+            app:npTitle="@string/row_reconnect" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

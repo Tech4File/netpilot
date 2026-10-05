@@ -1,6 +1,7 @@
 package app.netpilot
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -62,6 +63,7 @@ class MainActivity : AppCompatActivity(), NavRailView.Callback {
         savedInstanceState?.let {
             selectedTab = NavTab.entries.getOrElse(it.getInt(KEY_TAB, 0)) { NavTab.DASHBOARD }
         }
+        if (savedInstanceState == null) handleLaunchIntent(intent)
         showFragment(selectedTab)
         syncNavSelection()
 
@@ -79,6 +81,21 @@ class MainActivity : AppCompatActivity(), NavRailView.Callback {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt(KEY_TAB, selectedTab.ordinal)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleLaunchIntent(intent)
+    }
+
+    /**
+     * App shortcuts (long-press icon) and the Quick Settings tiles land here:
+     * static shortcuts carry the tab index (NavTab.ordinal) as an extra.
+     * singleTask launchMode → warm launches arrive via [onNewIntent].
+     */
+    private fun handleLaunchIntent(intent: Intent?) {
+        val tab = intent?.getIntExtra(EXTRA_SHORTCUT_TAB, -1) ?: -1
+        if (tab >= 0 && tab < NavTab.entries.size) selectTab(NavTab.entries[tab])
     }
 
     override fun onTabSelected(tab: NavTab) = selectTab(tab)
@@ -130,6 +147,13 @@ class MainActivity : AppCompatActivity(), NavRailView.Callback {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Battery model: the VPN transport listener is only needed while the
+        // UI is visible. Queries keep working; nothing listens in background.
+        VpnStatusMonitor.stop(this)
+    }
+
     override fun onResume() {
         super.onResume()
         VpnStatusMonitor.start(this)
@@ -167,6 +191,7 @@ class MainActivity : AppCompatActivity(), NavRailView.Callback {
 
     companion object {
         private const val KEY_TAB = "selected_tab"
+        const val EXTRA_SHORTCUT_TAB = "shortcut_tab"
         private const val REQUEST_NOTIF_PERMISSION = 1001
     }
 }

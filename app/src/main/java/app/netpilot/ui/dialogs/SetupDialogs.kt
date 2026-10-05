@@ -32,7 +32,11 @@ object SetupDialogs {
     const val ISSUES_URL = "$REPO_URL/issues"
     private const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
 
-    fun showPermissionGuide(activity: AppCompatActivity, onGranted: () -> Unit = {}) {
+    fun showPermissionGuide(
+        activity: AppCompatActivity,
+        accessLost: Boolean = false,
+        onGranted: () -> Unit = {},
+    ) {
         val context = activity
         val density = context.resources.displayMetrics.density
         fun dp(v: Int) = (v * density).toInt()
@@ -54,7 +58,7 @@ object SetupDialogs {
             box.addView(this)
         }
 
-        body(R.string.setup_intro, 0)
+        if (accessLost) body(R.string.access_lost_body, 0) else body(R.string.setup_intro, 0)
 
         // Easiest path first: Shizuku (no PC). Not installed -> Play Store
         // page; installed -> direct grant flow. ADB steps remain right below.
@@ -199,7 +203,7 @@ object SetupDialogs {
         box.addView(link)
 
         MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.setup_title)
+            .setTitle(if (accessLost) R.string.access_lost_title else R.string.setup_title)
             .setView(scroll)
             .setPositiveButton(R.string.action_done, null)
             .setOnDismissListener {

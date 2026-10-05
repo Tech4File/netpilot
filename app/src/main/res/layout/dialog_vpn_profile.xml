@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:paddingStart="@dimen/space_24"
@@ -162,6 +163,28 @@
                 android:inputType="text"
                 android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Per-app (split) tunneling, v2.2.0: shown for WireGuard profiles
+             that already have a config. Writes Included/ExcludedApplications
+             into the .conf — applied natively by the embedded engine. -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_per_app"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_12"
+            android:text="@string/action_per_app"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tv_per_app"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_4"
+            android:textSize="12sp"
+            android:textColor="@color/on_surface_variant"
+            android:visibility="gone"
+            tools:text="@string/per_app_hint" />
+
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/til_username"

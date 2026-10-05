@@ -1,0 +1,64 @@
+name: OpenVPN core probe
+
+# EXPERIMENTAL PROBE (v2.2.0) — manual dispatch ONLY, so it costs zero CI
+# minutes unless someone triggers it. Goal: learn whether the vendored
+# openvpn3-android core (source-only, see scripts/vendor-openvpn-core.sh)
+# configures and compiles for arm64-v8a with the current NDK, and capture the
+# build log. This does NOT ship anything: the embedded engine joins the app
+# only when a real tunnel is proven (docs/OPENVPN_CORE.md).
+#
+# Until this probe passes, OpenVPN profiles keep using the sanctioned bridge.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Vendor OpenVPN core sources (source-only, pinned ref)
+        run: |
+          chmod +x scripts/vendor-openvpn-core.sh
+          scripts/vendor-openvpn-core.sh openvpn-core-src
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+
+      - name: CMake configure + build probe (arm64-v8a)
+        continue-on-error: true   # probe: capture results, never fail the run
+        run: |
+          echo "Vendored tree layout:" | tee probe-configure.log
+          find openvpn-core-src -name "CMakeLists.txt" -o -name "*.cmake" | head -30 | tee -a probe-configure.log
+          if [ ! -f openvpn-core-src/CMakeLists.txt ]; then
+            echo "No root CMakeLists — the next probe iteration must author the :openvpn-core module CMake against the discovered sources." | tee -a probe-configure.log
+          fi
+          cmake -S openvpn-core-src -B /tmp/ovpn-build \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DCMAKE_BUILD_TYPE=Release 2>&1 | tee -a probe-configure.log || true
+          cmake --build /tmp/ovpn-build 2>&1 | tee probe-build.log || true
+
+      - name: Upload probe logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openvpn-core-probe-logs
+          path: |
+            probe-configure.log
+            probe-build.log
+          if-no-files-found: warn

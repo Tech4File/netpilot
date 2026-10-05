@@ -22,6 +22,7 @@ object VpnStatusMonitor {
 
     private val listeners = CopyOnWriteArrayList<Listener>()
     private var registeredContext: Context? = null
+    private var callback: ConnectivityManager.NetworkCallback? = null
 
     fun addListener(listener: Listener) = listeners.add(listener)
     fun removeListener(listener: Listener) = listeners.remove(listener)
@@ -44,6 +45,7 @@ object VpnStatusMonitor {
         try {
             cm.registerNetworkCallback(request, callback)
             registeredContext = appContext
+            this.callback = callback
         } catch (_: Exception) {
             // Very old/vendor-broken builds: UI still refreshes on resume.
         }
@@ -82,6 +84,21 @@ object VpnStatusMonitor {
         return cm.allNetworks.any { n ->
             cm.getNetworkCapabilities(n)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
         }
+    }
+
+    /**
+     * Unregisters the system callback — called when the app leaves the
+     * foreground (battery model: nothing listens while nothing is visible;
+     * queries like [isActive] keep working without the callback).
+     */
+    @Synchronized
+    fun stop(context: Context) {
+        callback?.let { cb ->
+            (context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager)
+                ?.runCatching { unregisterNetworkCallback(cb) }
+        }
+        callback = null
+        registeredContext = null
     }
 
     fun currentInfo(context: Context): VpnRuntimeInfo? {

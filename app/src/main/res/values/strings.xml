@@ -275,4 +275,37 @@
     <string name="err_wg_manual_fields">Fill address, client key, server key and Allowed IPs (or import a .conf)</string>
     <string name="wg_handshake_ok">Connected — server handshake confirmed</string>
     <string name="wg_no_handshake">Tunnel is up but the server has not responded yet — check keys, endpoint and port (UDP)</string>
+
+    <!-- v2.1.0 — Quick Settings tile + background model -->
+    <string name="tile_dns_label">NetPilot DNS</string>
+    <string name="tile_dns_off">Off</string>
+
+    <!-- v2.2.0 — access persistence (TV restarts), VPN tile, per-app VPN,
+         boot reconnect, app shortcuts. See docs/ACCESS-PERSISTENCE.md. -->
+    <string name="access_lost_title">Access lost — re-grant needed</string>
+    <string name="access_lost_body">NetPilot could change Private DNS before, but that access is gone now.\n\n• ADB grant: survives restarts and app updates — if you used it, the device was likely reset or NetPilot\'s data was cleared. Run the command below once and you are set for good.\n• Shizuku: stops on EVERY restart. Reopen the Shizuku app and tap Start (pairing is remembered).\n\nYour Private DNS setting itself keeps protecting — this only blocks NetPilot from changing it.</string>
+    <string name="tile_vpn_label">NetPilot VPN</string>
+    <string name="tile_vpn_off">Off</string>
+    <string name="tile_vpn_open_app">Tap to open</string>
+    <string name="row_reconnect">Reconnect VPN after restart</string>
+    <string name="row_reconnect_value_on">On — one attempt at power-on</string>
+    <string name="row_reconnect_value_off">Off</string>
+    <string name="boot_reconnect_title">VPN was on before the restart</string>
+    <string name="boot_reconnect_text">Tap to reconnect your WireGuard tunnel.</string>
+    <string name="shortcut_dns_short">Private DNS</string>
+    <string name="shortcut_dns_long">Private DNS</string>
+    <string name="shortcut_vpn_short">VPN</string>
+    <string name="shortcut_vpn_long">VPN</string>
+    <string name="shortcut_disabled">Unavailable</string>
+    <string name="action_per_app">Per-app VPN…</string>
+    <string name="per_app_title">Per-app VPN</string>
+    <string name="per_app_mode_all">All apps use the tunnel</string>
+    <string name="per_app_mode_include">only selected apps use the tunnel</string>
+    <string name="per_app_mode_exclude">selected apps bypass the tunnel</string>
+    <string name="per_app_hint">Choose Include (only these apps use the VPN) or Exclude (these apps bypass it). WireGuard supports one list, not both.</string>
+    <string name="per_app_exclude">Exclude selected</string>
+    <string name="per_app_include">Include selected</string>
+    <string name="per_app_none">No launchable apps found</string>
+    <string name="per_app_count">%1$d apps</string>
+    <string name="err_per_app">Invalid per-app selection — check the app list</string>
 </resources>
