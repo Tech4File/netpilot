@@ -40,7 +40,7 @@ jmethodID g_onLog = nullptr;
 jmethodID g_onProtect = nullptr;
 
 /// One wrapper instance per active session (guarded by g_client_mutex).
-class NetPilotClient final : public OpenVPNClient
+class NetPilotClient final : public ClientAPI::OpenVPNClient
 {
   public:
     NetPilotClient(JavaVM *vm, jobject callbacks, jint tunFd)
@@ -49,7 +49,7 @@ class NetPilotClient final : public OpenVPNClient
     jobject callbacksRef() const { return callbacks_; }
 
     // ---- OpenVPNClient callbacks -----------------------------------------
-    void event(const Event &e) override
+    void event(const ClientAPI::Event &e) override
     {
         ALOGI("event: %s (%s) fatal=%d", e.name.c_str(), e.info.c_str(),
               (int)e.fatal);
@@ -68,7 +68,7 @@ class NetPilotClient final : public OpenVPNClient
         }
     }
 
-    void log(const LogInfo &l) override
+    void log(const ClientAPI::LogInfo &l) override
     {
         attach([&](JNIEnv *env) {
             jstring line = env->NewStringUTF(l.text.c_str());
@@ -80,11 +80,31 @@ class NetPilotClient final : public OpenVPNClient
         });
     }
 
+    // App-custom control-channel protocol — NetPilot negotiates none.
+    void acc_event(const ClientAPI::AppCustomControlMessageEvent &e) override
+    {
+        (void)e;
+    }
+
+    // External PKI (keystore-backed keys) — not enabled in this build; the
+    // base class requires the pair to exist, so fail any request honestly.
+    void external_pki_cert_request(ClientAPI::ExternalPKICertRequest &req) override
+    {
+        req.error = true;
+        req.errorText = "external PKI not supported by this NetPilot build";
+    }
+
+    void external_pki_sign_request(ClientAPI::ExternalPKISignRequest &req) override
+    {
+        req.error = true;
+        req.errorText = "external PKI not supported by this NetPilot build";
+    }
+
     bool pause_on_connection_timeout() override { return false; }
 
     // Routing-loop safety: the core's own sockets must bypass the tunnel.
     bool socket_protect(openvpn_io::detail::socket_type socket,
-                        const std::string &remote, bool ipv6) override
+                        std::string remote, bool ipv6) override
     {
         (void)remote;
         (void)ipv6;
@@ -104,13 +124,14 @@ class NetPilotClient final : public OpenVPNClient
     // ONLY real decision is tun_builder_establish() returning our fd.
     bool tun_builder_new() override { return true; }
     bool tun_builder_set_layer(int layer) override { return layer == 3; }
-    bool tun_builder_reroute_gw(bool ipv4, bool ipv6, bool dns) override
+    bool tun_builder_reroute_gw(bool ipv4, bool ipv6, unsigned int flags) override
     {
-        (void)ipv4; (void)ipv6; (void)dns;
+        (void)ipv4; (void)ipv6; (void)flags;
         return true;
     }
     bool tun_builder_add_address(const std::string &address, int prefix_length,
-                                 bool gateway, bool ipv6, bool net30) override
+                                 const std::string &gateway, bool ipv6,
+                                 bool net30) override
     {
         (void)address; (void)prefix_length; (void)gateway; (void)ipv6; (void)net30;
         return true;
@@ -125,16 +146,6 @@ class NetPilotClient final : public OpenVPNClient
                                    int metric, bool ipv6) override
     {
         (void)address; (void)prefix_length; (void)metric; (void)ipv6;
-        return true;
-    }
-    bool tun_builder_add_dns_server(const std::string &address, bool ipv6) override
-    {
-        (void)address; (void)ipv6;
-        return true;
-    }
-    bool tun_builder_add_search_domain(const std::string &domain) override
-    {
-        (void)domain;
         return true;
     }
     bool tun_builder_set_mtu(int mtu) override { (void)mtu; return true; }
@@ -198,10 +209,12 @@ class NetPilotClient final : public OpenVPNClient
     /// The injection point: hand the core the fd the service already owns.
     int tun_builder_establish() override { return tun_fd_; }
 
-    void teardown() override {}
 
     // ---- CONNECTED latch ---------------------------------------------------
     bool wait_connected(unsigned int seconds) { return up_latch_.wait_for(seconds); }
+
+    /// Public: the connect-worker thread signals completion (also on error).
+    void notify_done() { up_latch_.notify(); }
 
   private:
     template <typename F> void attach(F &&body)
@@ -291,19 +304,18 @@ Java_app_netpilot_openvpn_core_OvpnCoreJni_nativeStart(JNIEnv *env, jobject,
 
     auto *client = new NetPilotClient(g_vm, env->NewGlobalRef(callbacks), tunFd);
 
-    ::Config opts;
+    ClientAPI::Config opts;
     opts.content = cfg;
     // No compression; the core then only negotiates compression stubs, the
     // safe default for modern servers (mirrors NetPilot's parser stance).
     opts.compressionMode = "no";
     opts.guiVersion = "NetPilot";
 
-    EvalConfig ec = client->eval_config(opts);
+    ClientAPI::EvalConfig ec = client->eval_config(opts);
     env->ReleaseStringUTFChars(config, cfg);
-    if (ec.status.error)
+    if (ec.error)
     {
-        ALOGW("eval_config failed: %s / %s", ec.status.status.c_str(),
-              ec.status.message.c_str());
+        ALOGW("eval_config failed: %s", ec.message.c_str());
         env->DeleteGlobalRef(client->callbacksRef());
         delete client;
         return JNI_FALSE;
@@ -311,10 +323,10 @@ Java_app_netpilot_openvpn_core_OvpnCoreJni_nativeStart(JNIEnv *env, jobject,
 
     g_client = client;
     g_worker = new std::thread([client] {
-        Status st = client->connect();
+        ClientAPI::Status st = client->connect();
         ALOGI("connect() returned: error=%d status=%s message=%s",
               (int)st.error, st.status.c_str(), st.message.c_str());
-        client->up_latch_.notify();
+        client->notify_done();
     });
     return JNI_TRUE;
 }
