@@ -59,6 +59,11 @@ class NetPilotVpnService : VpnService() {
             return
         }
 
+        // Embedded OpenVPN engine (v2.3.0): when the CI-built native library
+        // is packaged, the factory produces real in-app engine channels; on
+        // builds without it this is a no-op and the bridge guidance stays.
+        OvpnCoreInstall.install()
+
         val engine = VpnDataChannel.factory?.invoke(this)
         if (engine == null) {
             // No transport module installed — be honest, show why, and exit.

@@ -30,8 +30,8 @@ android {
         // versionName below is NEW (no matching vX.Y.Z tag exists yet). No bump
         // => the Release run checks and skips gracefully. versionCode must +1
         // with every release so signed APKs install over the previous ones.
-        versionCode = 21
-        versionName = "2.2.1"
+        versionCode = 22
+        versionName = "2.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("en")
@@ -126,6 +126,10 @@ android {
 dependencies {
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
+    // ---- Embedded OpenVPN engine (openvpn3 core, AGPL-3.0; native part is
+    // CI-built — see scripts/build-ovpn-native.sh). Kotlin + JNI surface
+    // compiles everywhere; builds without the .so fall back to the bridge.
+    implementation(project(":openvpn-core"))
     // ---- Embedded WireGuard engine (official tunnel library, Apache-2.0) ---
     implementation("com.wireguard.android:tunnel:1.0.20230706")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")

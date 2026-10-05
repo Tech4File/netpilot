@@ -97,10 +97,44 @@ jobs:
         env:
           GRANT_SECURE_SETTINGS: "false"
 
+  engine:
+    name: Embedded OpenVPN engine (native)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync ninja-build file
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Set up Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Build libovpncore (all ABIs)
+        run: |
+          chmod +x scripts/build-ovpn-native.sh scripts/vendor-openvpn-core.sh
+          scripts/build-ovpn-native.sh arm64-v8a armeabi-v7a x86 x86_64
+      - name: Verify artifacts
+        run: |
+          find openvpn-core/src/main/jniLibs -name "*.so" -exec file {} \;
+          test -f openvpn-core/src/main/jniLibs/arm64-v8a/libovpncore.so
+      - name: Upload engine libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ovpn-engine-libs
+          path: openvpn-core/src/main/jniLibs/
+          if-no-files-found: error
+
   release:
     name: Build & publish release
     runs-on: ubuntu-latest
-    needs: [verify, instrumented-gate]
+    needs: [verify, instrumented-gate, engine]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -108,6 +142,13 @@ jobs:
 
       - name: Ensure gradlew is executable
         run: chmod +x gradlew
+
+      # Package the CI-built embedded OpenVPN engine (never committed).
+      - name: Fetch engine libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: ovpn-engine-libs
+          path: openvpn-core/src/main/jniLibs
 
       - uses: actions/setup-java@v6
         with:

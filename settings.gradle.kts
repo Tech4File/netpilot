@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "NetPilot"
 include(":app")
+include(":openvpn-core")

@@ -1,124 +1,66 @@
-name: OpenVPN core probe
+name: OpenVPN native engine build
 
-# EXPERIMENTAL PROBE (v2.2.1) — manual dispatch ONLY, so it costs zero CI
-# minutes unless someone triggers it.
+# Builds libovpncore.so — the embedded OpenVPN engine (openvpn3 core +
+# NetPilot JNI) — for all four ABIs and uploads it as an artifact.
 #
-# v2.2.1 notes: the first probe failed in the vendor step because it cloned
-# github.com/openvpn/openvpn3-android — a repo that does not exist (404 →
-# git asked for credentials). This version vendors the REAL upstream core
-# (openvpn/openvpn3) and then cross-builds its dependencies for arm64-v8a
-# with the NDK, mirroring what the future :openvpn-core Gradle module must
-# do. Everything is continue-on-error: the artifact logs ARE the deliverable
-# that drives the next iteration. Nothing ships from this workflow.
+# - workflow_dispatch: build on demand (device-testing builds, iteration).
+# - repository_dispatch from Release: the Release workflow calls this to
+#   package the engine into the published APKs (binaries are never
+#   committed — standing rule).
+#
+# Recipe proven by the v2.2.1 probe (its two failures are fixed here):
+#   - asio found via explicit ASIO_INCLUDE_DIR (Findasio.cmake wants asio.hpp)
+#   - OpenSSL is the crypto flavor (the official Android client's default);
+#     the mbedtls 3.6.5 path died on its TF-PSA-Crypto submodule
+#   - lz4 + fmt cross-built static into a per-ABI prefix
 
 on:
   workflow_dispatch:
+    inputs:
+      abis:
+        description: 'ABIs to build (space separated)'
+        default: 'arm64-v8a armeabi-v7a x86 x86_64'
 
 permissions:
   contents: read
 
 jobs:
-  probe:
+  engine:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
 
       - name: Install host tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y rsync pkg-config cmake ninja-build
+          sudo apt-get install -y rsync ninja-build file
 
-      - name: Vendor OpenVPN core sources (source-only, pinned ref)
-        run: |
-          chmod +x scripts/vendor-openvpn-core.sh
-          scripts/vendor-openvpn-core.sh "$PWD/core-src"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Set up Android NDK
-        uses: nttld/setup-ndk@v1
-        id: ndk
-        with:
-          ndk-version: r27c
-
-      # Dependency layout the core's CMake expects:
-      #   DEP_DIR/asio/asio/...        (asio repo root contains an asio/ dir)
-      # plus cross-built libs in a prefix found via CMAKE_PREFIX_PATH /
-      # PKG_CONFIG_PATH: mbedtls (USE_MBEDTLS), lz4, fmt.
-      - name: Fetch core dependencies
         run: |
-          mkdir -p deps prefix
-          git clone --depth 1 -b master https://github.com/chriskohlhoff/asio.git deps/asio
-          git clone --depth 1 -b v3.6.5 https://github.com/ARMmbed/mbedtls.git deps/mbedtls-src
-          git clone --depth 1 -b v1.10.0 https://github.com/lz4/lz4.git deps/lz4-src
-          git clone --depth 1 -b 11.1.1 https://github.com/fmtlib/fmt.git deps/fmt-src
-          echo "NDK=$PWD/deps layout ready"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
-      - name: Cross-build mbedtls (arm64-v8a)
-        continue-on-error: true
+      - name: Build the engine (all ABIs)
         run: |
-          TC=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
-          cmake -S deps/mbedtls-src -B /tmp/mb -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=$TC -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
-            -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF \
-            -DCMAKE_INSTALL_PREFIX=$PWD/prefix 2>&1 | tee mbedtls-configure.log
-          cmake --build /tmp/mb 2>&1 | tee mbedtls-build.log
-          cmake --install /tmp/mb 2>&1 | tee mbedtls-install.log
+          chmod +x scripts/build-ovpn-native.sh scripts/vendor-openvpn-core.sh
+          scripts/build-ovpn-native.sh ${{ github.event.inputs.abis || 'arm64-v8a armeabi-v7a x86 x86_64' }}
 
-      - name: Cross-build lz4 (arm64-v8a)
-        continue-on-error: true
+      - name: Verify artifacts
         run: |
-          TC=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
-          cmake -S deps/lz4-src/build/cmake -B /tmp/lz4 -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=$TC -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
-            -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
-            -DCMAKE_INSTALL_PREFIX=$PWD/prefix 2>&1 | tee lz4-configure.log
-          cmake --build /tmp/lz4 2>&1 | tee lz4-build.log
-          cmake --install /tmp/lz4 2>&1 | tee lz4-install.log
+          find openvpn-core/src/main/jniLibs -name "*.so" -exec file {} \;
+          test -f openvpn-core/src/main/jniLibs/arm64-v8a/libovpncore.so
 
-      - name: Cross-build fmt (arm64-v8a)
-        continue-on-error: true
-        run: |
-          TC=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
-          cmake -S deps/fmt-src -B /tmp/fmt -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=$TC -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
-            -DCMAKE_BUILD_TYPE=Release -DFMT_TEST=OFF -DBUILD_SHARED_LIBS=OFF \
-            -DCMAKE_INSTALL_PREFIX=$PWD/prefix 2>&1 | tee fmt-configure.log
-          cmake --build /tmp/fmt 2>&1 | tee fmt-build.log
-          cmake --install /tmp/fmt 2>&1 | tee fmt-install.log
-
-      - name: Configure the core (arm64-v8a)
-        continue-on-error: true
-        run: |
-          export DEP_DIR=$PWD/deps
-          export PKG_CONFIG_PATH=$PWD/prefix/lib/pkgconfig:$PWD/prefix/lib64/pkgconfig
-          TC=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
-          cmake -S core-src -B /tmp/ovpn-build -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=$TC -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
-            -DCMAKE_BUILD_TYPE=Release -DUSE_MBEDTLS=ON \
-            -DCMAKE_PREFIX_PATH=$PWD/prefix \
-            -DCMAKE_FIND_ROOT_PATH=$PWD/prefix \
-            2>&1 | tee core-configure.log || true
-
-      - name: Build ovpncli client library (arm64-v8a)
-        continue-on-error: true
-        run: |
-          cmake --build /tmp/ovpn-build --target ovpncli 2>&1 | tee core-build.log || true
-          find /tmp/ovpn-build -name "*.so" -o -name "*.a" | tee core-artifacts.log || true
-
-      - name: Upload probe logs
-        if: always()
+      - name: Upload engine artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openvpn-core-probe-logs
-          path: |
-            *-configure.log
-            *-build.log
-            *-install.log
-            core-artifacts.log
-          if-no-files-found: warn
+          name: ovpn-engine-libs
+          path: openvpn-core/src/main/jniLibs/
+          if-no-files-found: error

@@ -73,13 +73,12 @@ No computer? Install Termux on any Android phone → `pkg install android-tools`
   where the platform IKEv2 API does not exist. Runs through NetPilot's own state machine,
   notification and Turn-off action; the server needs WireGuard enabled (every serious
   server/provider supports it alongside OpenVPN)
-- **OpenVPN engine bridge** — the OpenVPN path: the OpenVPN protocol core is a large native C++
-  codebase (AGPL) with crypto inside the privileged VPN path; bundling it is a project of its own
-  (planned). Today NetPilot drives the official open-source **OpenVPN for Android** app through
-  its documented external control API: one-time profile hand-off (`FileProvider` + `ACTION_VIEW`),
-  then connect/disconnect via `de.blinkt.openvpn.api.ConnectVPN` / `DisconnectVPN`. A bundled
-  in-app OpenVPN core remains possible via the pluggable `core.vpn.VpnDataChannel` seam
-  (see [docs/SECURITY.md](docs/SECURITY.md))
+- **OpenVPN: embedded engine (v2.3.0)** — the official OpenVPN 3 C++ core (AGPL-3.0) is compiled
+  by CI into `libovpncore.so` and linked behind the `core.vpn.VpnDataChannel` seam: import a
+  `.ovpn`, connect in-app, one app, Android 9+. Release builds ship the engine; the connection
+  state is the core's own CONNECTED event, never a guess. On builds without the native library
+  NetPilot drives the official open-source **OpenVPN for Android** app through its documented
+  external control API instead (same profile, honest labeling either way)
 - Android keeps one VPN active system-wide; the UI mirrors that honestly — an engine-app tunnel is
   reported as "Engine VPN active", never as NetPilot's own
 

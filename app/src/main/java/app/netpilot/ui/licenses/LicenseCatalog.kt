@@ -57,10 +57,10 @@ object LicenseCatalog {
             shipped = true,
         ),
         LicenseEntry(
-            "OpenVPN (engine bridge / planned core)",
-            "OpenVPN profiles connect through the official open-source OpenVPN for Android app via its documented external control API. OpenVPN® is a registered trademark of OpenVPN, Inc. An embedded AGPL-3.0 core is engineered in docs/OPENVPN_CORE.md.",
-            "External app (AGPL-3.0) — not bundled",
-            shipped = false,
+            "OpenVPN (embedded core + engine bridge)",
+            "OpenVPN profiles connect through the embedded OpenVPN 3 core (source: github.com/openvpn/openvpn3, linked into the app at build time by CI) when the build ships the native library; otherwise they connect through the official open-source OpenVPN for Android app via its documented external control API. OpenVPN® is a registered trademark of OpenVPN, Inc.",
+            "Embedded core: GNU AGPL-3.0 (source links in docs/OPENVPN_CORE.md) · bridge: external app",
+            shipped = true,
         ),
         LicenseEntry(
             "desugar_jdk_libs (Google)",

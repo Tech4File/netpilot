@@ -261,7 +261,6 @@
     <string name="hint_ikev2_needs_11">Platform-native IKEv2 — needs Android 11+ (not on this device). Choose WireGuard: it runs inside NetPilot on Android 9+.</string>
     <string name="hint_ikev2_native">Platform-native IKEv2/IPsec — the OS implements the protocol.</string>
     <string name="hint_wg_embedded">Embedded WireGuard engine — runs inside NetPilot, one app, Android 9+. Import your server\'s .conf.</string>
-    <string name="hint_ovpn_engine">OpenVPN connects through the official open-source engine app (guided import) — the embedded core is in development.</string>
 
     <!-- v2.0.9 — WireGuard manual entry + handshake honesty -->
     <string name="field_wg_address">Interface address (e.g. 10.2.0.2/32)</string>
@@ -308,4 +307,9 @@
     <string name="per_app_none">No launchable apps found</string>
     <string name="per_app_count">%1$d apps</string>
     <string name="err_per_app">Invalid per-app selection — check the app list</string>
+
+    <!-- v2.3.0 — embedded OpenVPN engine -->
+    <string name="hint_ovpn_engine">Embedded OpenVPN engine — runs inside NetPilot, one app. Import your server\'s .ovpn.</string>
+    <string name="hint_ovpn_bridge">OpenVPN connects through the official open-source engine app (guided import) — this build does not include the embedded engine.</string>
+    <string name="ovpn_core_connected">OpenVPN connected — embedded engine</string>
 </resources>

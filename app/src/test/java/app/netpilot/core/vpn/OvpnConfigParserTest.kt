@@ -151,4 +151,20 @@ class OvpnConfigParserTest {
         )
         assertEquals(1, config.remotes.size)
     }
+
+    @Test
+    fun `parsed config keeps the raw text for the embedded engine`() {
+        val text = "client\nremote vpn.example.com 1194\n<ca>\nMIIB\n</ca>\n"
+        val config = OvpnConfigParser.parse(text)
+        // The embedded core consumes the untouched profile text — the raw
+        // passthrough is what OvpnCoreChannel.open feeds it.
+        assertEquals(text, config.raw)
+    }
+
+    @Test
+    fun `default-built config has no raw text and the engine refuses it`() {
+        val config = OvpnConfig(isClient = true, remotes = listOf(OvpnConfig.Remote("h", 1194, "udp")))
+        // OvpnCoreChannel.open returns false for a null raw — pinned here.
+        assertNull(config.raw)
+    }
 }

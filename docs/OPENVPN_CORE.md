@@ -1,16 +1,20 @@
 # OpenVPN inside NetPilot — engineering plan & status
 
-**Status (v2.0.8):** OpenVPN profiles are fully managed in-app (import,
-parse, validation, secrets, profiles, status). Connection paths today:
+**Status (v2.3.0): the embedded engine is IMPLEMENTED and CI-built.**
+OpenVPN profiles are fully managed in-app (import, parse, validation,
+secrets, profiles, status). Connection paths:
 
 | Path | How it connects | Since |
 |---|---|---|
-| **Engine bridge** (shipped) | NetPilot drives the official open-source **OpenVPN for Android** app through its documented external control API (`de.blinkt.openvpn.api.ConnectVPN` / `DisconnectVPN`, FileProvider `.ovpn` hand-off). Works on Android 9/10/11+. | v2.0.6 |
-| **Embedded core** (this plan) | The OpenVPN protocol core compiled INTO NetPilot — one app, nothing else to install. | phase 2 (below) |
+| **Embedded engine** (implemented, v2.3.0) | The official OpenVPN 3 C++ core (`github.com/openvpn/openvpn3`, AGPL-3.0) compiled by CI into `libovpncore.so` behind `app.netpilot.openvpn.core` (`OvpnCoreEngine` → app-side `OvpnCoreChannel : VpnDataChannel`). NetPilotVpnService builds the TUN, the fd is injected via `tun_builder_establish`, `socket_protect` routes through `VpnService.protect`, and "connected" means the core's own CONNECTED event (bounded wait). Ships in release APKs whose CI ran the native job; builds without the library fall back honestly. | v2.3.0 |
+| **Engine bridge** (fallback, still shipped) | NetPilot drives the official open-source **OpenVPN for Android** app through its documented external control API. Used when a build has no native library (quality builds) or while the engine is device-validated. | v2.0.6 |
 
-An OpenVPN toggle that did not really tunnel would be a lie, and NetPilot
-never lies about connection state. The core is therefore built properly,
-in phases, with the heavy native build running on GitHub CI runners.
+What "really connects" means here: no state is faked anywhere. The tile/UI
+say connected only after the core emits CONNECTED; `open()` returns false on
+config rejection (`eval_config` error) or on the bounded CONNECTED timeout,
+and the service tears down. First end-to-end validation happens on the user's
+device with a real server (the bridge remains until then, per the standing
+rule that the bridge goes only when the core is device-proven).
 
 ## Why the core is not a quick patch
 

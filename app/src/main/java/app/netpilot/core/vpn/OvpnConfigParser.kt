@@ -26,6 +26,8 @@ data class OvpnConfig(
     val remoteRandom: Boolean = false,
     val dhcpDns: List<String> = emptyList(),
     val inlineBlockSizes: Map<String, Int> = emptyMap(),
+    /** The untouched .ovpn text — the embedded engine's native input. */
+    val raw: String? = null,
 ) {
     data class Remote(val host: String, val port: Int, val proto: String?)
 
@@ -143,6 +145,7 @@ object OvpnConfigParser {
             remoteRandom = remoteRandom,
             dhcpDns = dhcpDns,
             inlineBlockSizes = blocks,
+            raw = text,
         )
     }
 }

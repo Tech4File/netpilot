@@ -491,7 +491,13 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
                     R.string.hint_ikev2_needs_11
                 type == VpnType.PLATFORM_IKEV2 -> R.string.hint_ikev2_native
                 type == VpnType.WIREGUARD -> R.string.hint_wg_embedded
-                else -> R.string.hint_ovpn_engine
+                // OpenVPN: embedded engine when this build ships the native
+                // library; honest bridge guidance when it does not.
+                type == VpnType.OPENVPN &&
+                    app.netpilot.openvpn.core.OvpnCoreAvailability.isAvailable ->
+                    R.string.hint_ovpn_engine
+                type == VpnType.OPENVPN -> R.string.hint_ovpn_bridge
+                else -> R.string.hint_ovpn_bridge
             }
             dialogBinding.vpnTypeHint.setText(hintRes)
             dialogBinding.vpnTypeHint.setTextColor(
