@@ -34,7 +34,8 @@ using namespace openvpn;
 
 namespace {
 
-// Kotlin side: app.netpilot.openvpn.core.OvpnCoreJni.EngineCallbacks
+// Kotlin side: app.netpilot.openvpn.core.OvpnCoreEngine.Callbacks; native
+// methods live in the top-level object app.netpilot.openvpn.core.OvpnNative.
 jmethodID g_onEvent = nullptr;
 jmethodID g_onLog = nullptr;
 jmethodID g_onProtect = nullptr;
@@ -272,7 +273,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *)
     if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1) != JNI_OK)
         return JNI_ERR;
     jclass cb = env->FindClass(
-        "app/netpilot/openvpn/core/OvpnCoreJni$EngineCallbacks");
+        "app/netpilot/openvpn/core/OvpnCoreEngine$Callbacks");
     if (cb == nullptr)
         return JNI_ERR;
     g_onEvent = env->GetMethodID(cb, "onEvent",
@@ -286,7 +287,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *)
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_netpilot_openvpn_core_OvpnCoreJni_nativeStart(JNIEnv *env, jobject,
+Java_app_netpilot_openvpn_core_OvpnNative_nativeStart(JNIEnv *env, jobject,
                                                        jobject callbacks,
                                                        jstring config,
                                                        jint tunFd)
@@ -332,7 +333,7 @@ Java_app_netpilot_openvpn_core_OvpnCoreJni_nativeStart(JNIEnv *env, jobject,
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_netpilot_openvpn_core_OvpnCoreJni_nativeWaitConnected(JNIEnv *,
+Java_app_netpilot_openvpn_core_OvpnNative_nativeWaitConnected(JNIEnv *,
                                                                jobject,
                                                                jint seconds)
 {
@@ -344,14 +345,14 @@ Java_app_netpilot_openvpn_core_OvpnCoreJni_nativeWaitConnected(JNIEnv *,
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_netpilot_openvpn_core_OvpnCoreJni_nativeIsRunning(JNIEnv *, jobject)
+Java_app_netpilot_openvpn_core_OvpnNative_nativeIsRunning(JNIEnv *, jobject)
 {
     std::lock_guard<std::mutex> lk(g_client_mutex);
     return g_client != nullptr ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_netpilot_openvpn_core_OvpnCoreJni_nativeStop(JNIEnv *env, jobject)
+Java_app_netpilot_openvpn_core_OvpnNative_nativeStop(JNIEnv *env, jobject)
 {
     NetPilotClient *client = nullptr;
     std::thread *worker = nullptr;

@@ -78,8 +78,15 @@ class NetPilotVpnService : VpnService() {
         }
         tun = descriptor
         channel = engine
-        val up = runCatching { engine.open(descriptor, config) }.getOrDefault(false)
-        if (!up) teardown()
+        // engine.open() BLOCKS (it waits for the core's CONNECTED, up to
+        // ~30s). Running it here would freeze the main thread and ANR the
+        // app at the first connect — it runs on a worker; failures tear
+        // down on the main thread as everywhere else.
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread {
+            val up = runCatching { engine.open(descriptor, config) }.getOrDefault(false)
+            if (!up) main.post { if (channel === engine) teardown() }
+        }.start()
     }
 
     private fun establish(config: OvpnConfig): ParcelFileDescriptor? = try {

@@ -44,10 +44,17 @@ class BootReconnectReceiver : BroadcastReceiver() {
             BootReconnect.Outcome.CONNECT ->
                 if (VpnService.prepare(appContext) == null) {
                     // Consent already granted (persists across reboots): start
-                    // the tunnel headlessly. Failure → one honest notification.
+                    // the tunnel headlessly. goAsync keeps this process alive
+                    // until the connect resolves — without it the system can
+                    // kill us mid-connect (the broadcast process exists only
+                    // for this receiver). Failure → one honest notification.
+                    val pending = goAsync()
                     WireGuardManager.get(appContext).connect(
                         connectable!!,
-                        onResult = { ok, _ -> if (!ok) notify(appContext) },
+                        onResult = { ok, _ ->
+                            if (!ok) notify(appContext)
+                            pending.finish()
+                        },
                     )
                 } else {
                     notify(appContext)

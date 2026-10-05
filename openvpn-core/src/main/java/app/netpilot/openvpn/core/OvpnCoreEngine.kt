@@ -30,7 +30,7 @@ class OvpnCoreEngine private constructor() {
         fun onProtect(fd: Int): Boolean
     }
 
-    private val jni = Native()
+    private val jni = OvpnNative
 
     /** Starts the session over the already-established TUN fd. */
     fun start(configText: String, tunFd: Int, callbacks: Callbacks): Boolean =
@@ -43,19 +43,6 @@ class OvpnCoreEngine private constructor() {
 
     fun stop() = jni.nativeStop()
 
-    private class Native {
-        external fun nativeStart(callbacks: Callbacks, config: String, tunFd: Int): Boolean
-        external fun nativeWaitConnected(seconds: Int): Boolean
-        external fun nativeIsRunning(): Boolean
-        external fun nativeStop()
-
-        companion object {
-            init {
-                System.loadLibrary("ovpncore")
-            }
-        }
-    }
-
     companion object {
         /**
          * Returns an engine, or null when the native library is absent
@@ -66,3 +53,24 @@ class OvpnCoreEngine private constructor() {
             if (OvpnCoreAvailability.isAvailable) OvpnCoreEngine() else null
     }
 }
+
+/**
+ * The JNI binding. A top-level object (NOT a nested class) deliberately:
+ * JNI resolves Kotlin `external fun`s to C symbols derived from the class
+ * name, and a top-level object keeps those names simple and stable —
+ * Java_app_netpilot_openvpn_core_OvpnNative_nativeStart, exactly what
+ * ovpncore_jni.cpp exports. Nesting would dollar-mangle the symbol and
+ * silently break resolution at the first connect.
+ */
+internal object OvpnNative {
+
+    init {
+        System.loadLibrary("ovpncore")
+    }
+
+    external fun nativeStart(callbacks: OvpnCoreEngine.Callbacks, config: String, tunFd: Int): Boolean
+    external fun nativeWaitConnected(seconds: Int): Boolean
+    external fun nativeIsRunning(): Boolean
+    external fun nativeStop()
+}
+

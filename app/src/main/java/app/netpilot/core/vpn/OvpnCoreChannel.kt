@@ -19,7 +19,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class OvpnCoreChannel(context: Context) : VpnDataChannel {
 
-    private val serviceContext: Context = context.applicationContext
+    // The factory is invoked with the RUNNING VpnService — keep that exact
+    // instance for protect(). Using applicationContext here would make the
+    // VpnService cast fail, and EVERY core socket would go unprotected,
+    // deadlocking the tunnel inside itself.
+    private val vpnContext: Context = context
     private val stopping = AtomicBoolean(false)
 
     @Volatile
@@ -42,7 +46,7 @@ class OvpnCoreChannel(context: Context) : VpnDataChannel {
         stopping.set(false)
 
         val fd = tun.detachFd()
-        val started = engine.start(raw, fd, Callbacks(serviceContext))
+        val started = engine.start(raw, fd, Callbacks(vpnContext))
         if (!started) {
             closeFd(fd)
             Log.w(TAG, "open: core rejected the profile")
@@ -70,7 +74,7 @@ class OvpnCoreChannel(context: Context) : VpnDataChannel {
     }
 
     /** JNI callbacks: protect (routing-loop safety) + honest event logging. */
-    private class Callbacks(private val context: Context) : OvpnCoreEngine.Callbacks {
+    private class Callbacks(private val vpn: Context) : OvpnCoreEngine.Callbacks {
 
         override fun onEvent(name: String, info: String, fatal: Boolean) {
             Log.i(TAG, buildString {
@@ -85,8 +89,9 @@ class OvpnCoreChannel(context: Context) : VpnDataChannel {
         }
 
         override fun onProtect(fd: Int): Boolean = try {
-            val svc = context as? VpnService
+            val svc = vpn as? VpnService
             if (svc == null) {
+                Log.w(TAG, "protect: context is not the VpnService — socket left unprotected")
                 false
             } else {
                 svc.protect(fd)
