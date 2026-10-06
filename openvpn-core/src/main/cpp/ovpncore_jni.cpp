@@ -222,7 +222,7 @@ class NetPilotClient final : public ClientAPI::OpenVPNClient
     {
         JNIEnv *env = nullptr;
         bool attachedHere = false;
-        if (vm_->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1) != JNI_OK)
+        if (vm_->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK)
         {
             if (vm_->AttachCurrentThread(&env, nullptr) != JNI_OK)
                 return;
@@ -270,7 +270,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *)
 {
     g_vm = vm;
     JNIEnv *env = nullptr;
-    if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1) != JNI_OK)
+    if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK)
         return JNI_ERR;
     jclass cb = env->FindClass(
         "app/netpilot/openvpn/core/OvpnCoreEngine$Callbacks");
@@ -283,7 +283,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *)
     env->DeleteLocalRef(cb);
     if (g_onEvent == nullptr || g_onLog == nullptr || g_onProtect == nullptr)
         return JNI_ERR;
-    return JNI_VERSION_1;
+    return JNI_VERSION_1_6;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
