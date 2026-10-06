@@ -1,5 +1,6 @@
 package app.netpilot.core.tiles
 
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
@@ -9,21 +10,27 @@ import app.netpilot.MainActivity
 import app.netpilot.R
 import app.netpilot.core.model.VpnProfile
 import app.netpilot.core.model.VpnType
-import app.netpilot.core.platform.Sdk
+import app.netpilot.core.vpn.NetPilotVpnService
 import app.netpilot.core.vpn.VpnProfileRepository
-import app.netpilot.core.vpn.WgConfigCheck
+import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.WireGuardManager
 import app.netpilot.core.vpn.WireGuardRuntime
 
 /**
- * Quick Settings tile: one-tap VPN toggle (v2.2.0) — the second tile on the
- * seam the DNS tile built. Boundaryless exactly like DnsTileService: bound
- * only while the shade shows it, zero cost otherwise.
+ * Quick Settings tile: one-tap VPN toggle (Android 9+).
  *
- * Honest semantics: the tile toggles NetPilot's EMBEDDED WireGuard engine
- * (the only engine that can be toggled headlessly — it dies with the app
- * process, so [WireGuardRuntime] is always the truth). Platform IKEv2
- * tunnels belong to the OS; OpenVPN rides the embedded core when it ships.
+ * v2.4.0: the tile reflects and controls ANY NetPilot tunnel — embedded
+ * WireGuard AND the embedded OpenVPN transport — not WireGuard alone (with
+ * an OpenVPN profile up the tile used to stay grey, which read as "off"
+ * while the device was very much tunnelled). Tap toggles whatever is up;
+ * when nothing is up it reconnects the last-used profile of any embedded
+ * type; long-press opens the app's VPN page (QS_TILE_PREFERENCES router).
+ *
+ * Battery model unchanged: the system binds this service only while the
+ * shade shows the tile or the user taps it. The visual on/off styling is
+ * the SYSTEM's: Tile.STATE_ACTIVE / STATE_INACTIVE are tinted by the
+ * platform with the current theme's accent (per-API, light and dark) —
+ * NetPilot paints no colors of its own, by design.
  */
 class VpnTileService : TileService() {
 
@@ -36,67 +43,89 @@ class VpnTileService : TileService() {
 
     override fun onClick() {
         val context = applicationContext
-        val profile = usableWgProfile(context) ?: run { openApp(); return }
-        when (VpnTileState.compute(WireGuardRuntime.isRunning, profile != null, consentGranted(context)).action) {
-            VpnTileState.Action.TOGGLE_OFF ->
-                WireGuardManager.get(context).disconnect { render() }
-            VpnTileState.Action.CONNECT_LAST ->
-                WireGuardManager.get(context).connect(profile, onResult = { _, _ -> render() })
+        val repo = VpnProfileRepository(context)
+        val target = TileVpnTargets.pick(repo.list(), repo.lastConnectedId())
+        when (
+            VpnTileState.compute(
+                running = anyTunnelRunning(),
+                hasLastProfile = target != null,
+                consentGranted = consentGranted(context),
+            ).action
+        ) {
+            VpnTileState.Action.TOGGLE_OFF -> stopActiveTunnel(context)
+            VpnTileState.Action.CONNECT_LAST -> connectLast(context, target!!)
             VpnTileState.Action.OPEN_APP -> openApp()
+        }
+    }
+
+    /** Any NetPilot tunnel: the embedded WireGuard engine or the OpenVPN transport. */
+    private fun anyTunnelRunning(): Boolean =
+        WireGuardRuntime.isRunning || NetPilotVpnService.isRunning
+
+    private fun stopActiveTunnel(context: Context) {
+        if (WireGuardRuntime.isRunning) {
+            WireGuardManager.get(context).disconnect { render() }
+        } else {
+            context.startService(
+                Intent(context, NetPilotVpnService::class.java)
+                    .setAction(NetPilotVpnService.ACTION_DISCONNECT),
+            )
+            render()
+        }
+    }
+
+    private fun connectLast(context: Context, profile: VpnProfile) {
+        when (profile.type) {
+            VpnType.WIREGUARD ->
+                WireGuardManager.get(context).connect(profile, onResult = { _, _ -> render() })
+            VpnType.OPENVPN -> {
+                // Consent is already verified by the caller; the embedded
+                // engine connects headlessly — the same hand-off the VPN
+                // tab performs (no second UI, no bridge).
+                context.startService(
+                    Intent(context, NetPilotVpnService::class.java)
+                        .setAction(NetPilotVpnService.ACTION_CONNECT)
+                        .putExtra(NetPilotVpnService.EXTRA_OVPN, profile.ovpnConfig)
+                        .putExtra(NetPilotVpnService.EXTRA_SESSION, profile.name)
+                        .putExtra(NetPilotVpnService.EXTRA_PROFILE_ID, profile.id),
+                )
+                render()
+            }
+            else -> openApp()
         }
     }
 
     private fun render() {
         val tile = qsTile ?: return
         val context = applicationContext
-        val hasProfile = usableWgProfile(context) != null
         val model = VpnTileState.compute(
-            running = WireGuardRuntime.isRunning,
-            hasWgProfile = hasProfile,
+            running = anyTunnelRunning(),
+            hasLastProfile = TileVpnTargets.pick(
+                VpnProfileRepository(context).list(),
+                VpnProfileRepository(context).lastConnectedId(),
+            ) != null,
             consentGranted = consentGranted(context),
         )
         tile.state = if (model.active) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.label = getString(R.string.tile_vpn_label)
-        if (Build.VERSION.SDK_INT >= Sdk.Q) {
-            tile.subtitle = model.subtitle ?: if (model.action == VpnTileState.Action.OPEN_APP) {
-                getString(R.string.tile_vpn_open_app)
-            } else {
-                getString(R.string.tile_vpn_off)
-            }
+        if (Build.VERSION.SDK_INT >= 29) {
+            tile.subtitle = model.subtitle
+                ?: VpnSessionState.activeTunnel(context)?.name
+                ?: getString(R.string.tile_vpn_off)
         }
         tile.updateTile()
     }
 
-    private fun consentGranted(context: android.content.Context): Boolean = try {
+    private fun consentGranted(context: Context): Boolean = try {
         VpnService.prepare(context) == null
     } catch (_: Exception) {
         false
     }
 
-    /** Last-connected WireGuard profile, else the first usable one. */
-    private fun usableWgProfile(context: android.content.Context): VpnProfile? {
-        val repo = VpnProfileRepository(context)
-        fun VpnProfile.usable() = type == VpnType.WIREGUARD && !wgConfig.isNullOrBlank() &&
-            WgConfigCheck.isPlausible(wgConfig!!)
-        return repo.lastConnectedId()?.let { repo.get(it) }?.takeIf { it.usable() }
-            ?: repo.list().firstOrNull { it.usable() }
-    }
-
     private fun openApp() {
-        val intent = Intent(this, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (Build.VERSION.SDK_INT >= Sdk.U) {
-            @Suppress("InlinedApi") // guarded above; constant inlined at compile time
-            startActivityAndCollapse(
-                android.app.PendingIntent.getActivity(
-                    this, 0, intent,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
-                ),
-            )
-        } else {
-            // API 28–33: the Intent overload is the only form; deprecated as of 34.
-            @Suppress("DEPRECATION", "StartActivityAndCollapseDeprecated")
-            startActivityAndCollapse(intent)
-        }
+        TileLaunch.launchAndCollapse(
+            this,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }

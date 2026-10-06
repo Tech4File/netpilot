@@ -460,7 +460,10 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             EngineBridge.launchDisconnect(context)
         }
         VpnStatusService.stop(context)
-        repo.setLastConnectedId(null)
+        // lastConnectedId deliberately KEPT: it means "last used", not
+        // "currently connected" — the VPN switch reconnects the last-used
+        // profile from it. Clearing it here made the switch lose its target
+        // after the first disconnect.
         when {
             hadOurs -> toast(getString(R.string.vpn_profile_stopped_toast))
             VpnStatusMonitor.foreignVpnActive(context) ->

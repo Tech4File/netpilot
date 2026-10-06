@@ -29,6 +29,16 @@ class OvpnCoreChannel(context: Context) : VpnDataChannel {
     @Volatile
     private var engine: OvpnCoreEngine? = null
 
+    /**
+     * The TUN fd this channel took over with detachFd(). The channel OWNS it:
+     * closing it is what actually releases the system VPN (the detached
+     * ParcelFileDescriptor the service holds is a no-op on close). Kept as an
+     * int so the release path can adopt-and-close it even after a failed
+     * start.
+     */
+    @Volatile
+    private var ownedTunFd: Int = -1
+
     override fun open(tun: ParcelFileDescriptor, config: OvpnConfig): Boolean {
         val raw = config.raw
         if (raw.isNullOrBlank()) {
@@ -46,9 +56,10 @@ class OvpnCoreChannel(context: Context) : VpnDataChannel {
         stopping.set(false)
 
         val fd = tun.detachFd()
+        ownedTunFd = fd
         val started = engine.start(raw, fd, Callbacks(vpnContext))
         if (!started) {
-            closeFd(fd)
+            releaseTunFd()
             Log.w(TAG, "open: core rejected the profile")
             return false
         }
@@ -65,8 +76,21 @@ class OvpnCoreChannel(context: Context) : VpnDataChannel {
 
     private fun stopSession() {
         if (stopping.getAndSet(true)) return
+        // ORDER IS THE FIX: close the TUN fd FIRST. That is the moment the
+        // system VPN disappears and normal internet routing is restored, and
+        // the dead fd breaks the core out of its packet loop so the stop and
+        // its join finish promptly. Stopping the engine first risked the core
+        // still holding an open TUN through a slow stop handshake — the
+        // field-reported "VPN stays up until force-stop".
+        releaseTunFd()
         runCatching { engine?.stop() }
         engine = null
+    }
+
+    private fun releaseTunFd() {
+        val fd = ownedTunFd
+        ownedTunFd = -1
+        if (fd >= 0) closeFd(fd)
     }
 
     private fun closeFd(fd: Int) {

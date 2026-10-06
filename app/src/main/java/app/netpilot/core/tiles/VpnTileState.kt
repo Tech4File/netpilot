@@ -9,10 +9,10 @@ package app.netpilot.core.tiles
 object VpnTileState {
 
     enum class Action {
-        /** An embedded WireGuard tunnel is up — tap disconnects. */
+        /** Any NetPilot tunnel is up (WireGuard or OpenVPN) — tap disconnects. */
         TOGGLE_OFF,
 
-        /** A last-used WireGuard profile exists — tap reconnects it. */
+        /** A last-used embedded profile exists — tap reconnects it. */
         CONNECT_LAST,
 
         /** Nothing NetPilot can toggle itself — tap opens the app. */
@@ -29,13 +29,13 @@ object VpnTileState {
      * @param running        [WireGuardRuntime.isRunning] — the in-process
      *                       engine marker; when the app process dies the
      *                       userspace tunnel dies with it, so this is honest.
-     * @param hasWgProfile   a usable WireGuard profile exists to reconnect.
+     * @param hasLastProfile   a usable WireGuard profile exists to reconnect.
      * @param consentGranted VpnService.prepare(context) == null.
      */
-    fun compute(running: Boolean, hasWgProfile: Boolean, consentGranted: Boolean): Model = when {
+    fun compute(running: Boolean, hasLastProfile: Boolean, consentGranted: Boolean): Model = when {
         running ->
             Model(active = true, subtitle = null, action = Action.TOGGLE_OFF)
-        hasWgProfile && consentGranted ->
+        hasLastProfile && consentGranted ->
             Model(active = false, subtitle = null, action = Action.CONNECT_LAST)
         else ->
             Model(active = false, subtitle = null, action = Action.OPEN_APP)

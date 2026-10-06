@@ -68,7 +68,17 @@ class WireGuardManager private constructor(context: Context) {
             // "running" forever and the UI showed connected over a dead
             // tunnel — the field-reported desync.
             if (newState == Tunnel.State.DOWN) {
-                settleStoppedAsync()
+                // VERIFY before settling: the backend can surface transient
+                // DOWNs during reconfiguration (and our own putDown fires
+                // one). Killing the markers on a spurious DOWN made
+                // reconcile() treat the LIVE tunnel as a stray and shut it
+                // down — tunnels died "after some time" in the field.
+                Thread {
+                    val reallyDown = runCatching {
+                        backend.getRunningTunnelNames().none { it == tunnelName }
+                    }.getOrDefault(true)
+                    if (reallyDown) settleStoppedAsync()
+                }.start()
             }
         }
     }
@@ -210,18 +220,14 @@ class WireGuardManager private constructor(context: Context) {
                         changed = true
                     }
                 } else {
-                    // Zombies: tunnels the backend runs that we do not track.
-                    for (name in running) {
-                        if (tracked == null || name != tracked.name) {
-                            runCatching {
-                                backend.setState(NpTunnel(name), Tunnel.State.DOWN, null)
-                            }
-                            changed = true
-                        }
-                    }
-                    if (tracked != null && running.contains(tracked.name) && !WireGuardRuntime.isRunning) {
-                        // Real tunnel up, marks lost: re-own it honestly.
-                        WireGuardRuntime.markStarted("", tracked.name)
+                    // A running tunnel we do not track is almost always OURS
+                    // after a spurious marker loss: RE-OWN it by name instead
+                    // of killing it. Killing on divergence shut down live
+                    // tunnels in the field. (NetPilot is the only tunnel
+                    // creator on the device; there are no foreign strays.)
+                    val name = tracked?.name?.takeIf { running.contains(it) } ?: running.first()
+                    if (!WireGuardRuntime.isRunning) {
+                        WireGuardRuntime.markStarted("", name)
                         AppPreferences(appContext).vpnWasActiveEmbeddedWg = true
                         changed = true
                     }

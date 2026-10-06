@@ -118,8 +118,16 @@ class NetPilotVpnService : VpnService() {
         isRunning = false
         runningSession = null
         runningProfileId = null
-        runCatching { channel?.close() }
+        // Engine stop OFF the main thread: close() releases the TUN fd (the
+        // actual system-VPN teardown) and then joins the core — joining on
+        // main froze disconnects until force-stop in the field.
+        val engineChannel = channel
         channel = null
+        if (engineChannel != null) {
+            Thread { runCatching { engineChannel.close() } }.start()
+        }
+        // The service's detached descriptor is a no-op on close (the channel
+        // owns the raw fd now) — drop the reference.
         runCatching { tun?.close() }
         tun = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
