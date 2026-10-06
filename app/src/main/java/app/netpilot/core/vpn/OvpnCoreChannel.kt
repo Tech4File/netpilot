@@ -130,4 +130,14 @@ object OvpnCoreInstall {
             installed = true
         }
     }
+
+    /**
+     * Installs (if needed) and reports whether the embedded engine is wired.
+     * Call sites that must DECIDE now use this instead of reading the factory
+     * directly, so the decision can never race or depend on install order.
+     */
+    fun ensureInstalled(): Boolean {
+        install()
+        return VpnDataChannel.factory != null
+    }
 }

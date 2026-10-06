@@ -340,8 +340,11 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             toast(getString(R.string.err_no_ovpn))
             return
         }
-        // A bundled engine module (optional, not shipped) takes the in-app path.
-        if (VpnDataChannel.factory != null) {
+        // Embedded engine path: decided via ensureInstalled() so the wiring
+        // is done here if it somehow has not happened yet (app-start install
+        // is the normal path; this is the belt to those braces). Absent
+        // native library -> honest engine-app bridge guidance, as before.
+        if (app.netpilot.core.vpn.OvpnCoreInstall.ensureInstalled()) {
             val prepare = VpnService.prepare(requireContext())
             if (prepare != null) {
                 pendingOpenVpnProfile = profile

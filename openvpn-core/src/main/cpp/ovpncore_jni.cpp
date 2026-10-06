@@ -20,6 +20,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -261,7 +262,12 @@ class NetPilotClient final : public ClientAPI::OpenVPNClient
 
 JavaVM *g_vm = nullptr;
 std::mutex g_client_mutex;
-NetPilotClient *g_client = nullptr;
+// shared_ptr on purpose: nativeWaitConnected must NOT hold the session
+// mutex while it sleeps (up to CONNECT_TIMEOUT seconds), otherwise a
+// nativeStop arriving from the main thread would block on the mutex for
+// the whole wait and ANR the app. Holding a reference instead keeps the
+// client alive until both the stopper and any waiter are done.
+std::shared_ptr<NetPilotClient> g_client;
 std::thread *g_worker = nullptr;
 
 } // namespace
@@ -303,7 +309,7 @@ Java_app_netpilot_openvpn_core_OvpnNative_nativeStart(JNIEnv *env, jobject,
     if (cfg == nullptr)
         return JNI_FALSE;
 
-    auto *client = new NetPilotClient(g_vm, env->NewGlobalRef(callbacks), tunFd);
+    auto client = std::make_shared<NetPilotClient>(g_vm, env->NewGlobalRef(callbacks), tunFd);
 
     ClientAPI::Config opts;
     opts.content = cfg;
@@ -318,11 +324,14 @@ Java_app_netpilot_openvpn_core_OvpnNative_nativeStart(JNIEnv *env, jobject,
     {
         ALOGW("eval_config failed: %s", ec.message.c_str());
         env->DeleteGlobalRef(client->callbacksRef());
-        delete client;
+        // The core never took the TUN fd on this path; the Kotlin caller
+        // closes it when start() returns false. Nothing to free here.
         return JNI_FALSE;
     }
 
     g_client = client;
+    // The worker holds its own reference, so the client outlives the
+    // global handle no matter who stops first.
     g_worker = new std::thread([client] {
         ClientAPI::Status st = client->connect();
         ALOGI("connect() returned: error=%d status=%s message=%s",
@@ -337,11 +346,17 @@ Java_app_netpilot_openvpn_core_OvpnNative_nativeWaitConnected(JNIEnv *,
                                                                jobject,
                                                                jint seconds)
 {
-    std::lock_guard<std::mutex> lk(g_client_mutex);
-    if (g_client == nullptr)
+    std::shared_ptr<NetPilotClient> client;
+    {
+        std::lock_guard<std::mutex> lk(g_client_mutex);
+        client = g_client;
+    }
+    if (!client)
         return JNI_FALSE;
-    return g_client->wait_connected((unsigned int)seconds) ? JNI_TRUE
-                                                           : JNI_FALSE;
+    // Waiting WITHOUT the session mutex: a concurrent nativeStop stops the
+    // core, the worker finishes, this latch completes — no blocked threads.
+    return client->wait_connected((unsigned int)seconds) ? JNI_TRUE
+                                                         : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -354,16 +369,15 @@ Java_app_netpilot_openvpn_core_OvpnNative_nativeIsRunning(JNIEnv *, jobject)
 extern "C" JNIEXPORT void JNICALL
 Java_app_netpilot_openvpn_core_OvpnNative_nativeStop(JNIEnv *env, jobject)
 {
-    NetPilotClient *client = nullptr;
+    std::shared_ptr<NetPilotClient> client;
     std::thread *worker = nullptr;
     {
         std::lock_guard<std::mutex> lk(g_client_mutex);
-        client = g_client;
+        client = std::move(g_client);
         worker = g_worker;
-        g_client = nullptr;
         g_worker = nullptr;
     }
-    if (client != nullptr)
+    if (client)
     {
         client->stop();
         if (worker != nullptr)
@@ -373,6 +387,9 @@ Java_app_netpilot_openvpn_core_OvpnNative_nativeStop(JNIEnv *env, jobject)
             delete worker;
         }
         env->DeleteGlobalRef(client->callbacksRef());
-        delete client;
+        // Releasing the last reference frees the client; the core's own
+        // teardown (tun_builder_persist()==false) closes the TUN fd. If a
+        // concurrent nativeWaitConnected still holds a reference, the
+        // client is freed only after that wait returns.
     }
 }
