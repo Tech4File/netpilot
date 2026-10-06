@@ -16,6 +16,7 @@ import app.netpilot.core.model.VpnProfile
 import app.netpilot.core.model.VpnType
 import app.netpilot.core.status.VpnStatusService
 import app.netpilot.core.vpn.EngineBridge
+import app.netpilot.core.vpn.TunnelEvents
 import app.netpilot.core.vpn.NetPilotVpnService
 import app.netpilot.core.vpn.OvpnConfigParser
 import app.netpilot.core.vpn.PlatformVpnController
@@ -127,9 +128,14 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         binding.vpnAddRow.setOnClickListener { showProfileDialog(null) }
     }
 
+    private val tunnelListener = {
+        if (_binding != null) refresh()
+    }
+
     override fun onResume() {
         super.onResume()
         VpnStatusMonitor.addListener(this)
+        TunnelEvents.addListener(tunnelListener)
         // Recognise our own platform IKEv2 tunnel after process death — or drop
         // the stale marker if the tunnel is gone (reboot / teardown elsewhere).
         VpnSessionState.reconcile(requireContext(), VpnStatusMonitor.isActive(requireContext()))
@@ -140,6 +146,7 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         super.onPause()
         disarmConnectWatchdog()
         VpnStatusMonitor.removeListener(this)
+        TunnelEvents.removeListener(tunnelListener)
     }
 
     override fun onDestroyView() {
@@ -159,12 +166,17 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         // Self-heal an abandoned connect attempt before rendering (no screen
         // may sit on "Connecting…" for a tunnel that will never appear).
         VpnSessionState.clearIfExpired(context, VpnStatusMonitor.isActive(context))
+        // Self-heal any marker/backend divergence before rendering; the
+        // result converges via TunnelEvents if something had to change.
+        WireGuardManager.get(context).reconcile()
         val profiles = repo.list()
         val vpnActive = VpnStatusMonitor.ourVpnActive(context)
         val foreignVpn = VpnStatusMonitor.foreignVpnActive(context)
         val claimed = VpnSessionState.anySessionClaimed(context)
-        val tunnelId = VpnSessionState.activeTunnel(context)?.profileId
+        val activeTunnel = VpnSessionState.activeTunnel(context)
+        val tunnelId = activeTunnel?.profileId
         val connectedId = tunnelId?.takeIf { id -> profiles.any { p -> p.id == id } }
+            ?: profiles.firstOrNull { it.name == activeTunnel?.name }?.id
         val connectingId = if (!vpnActive && claimed) connectedId else null
 
         suppressUiCallbacks = true

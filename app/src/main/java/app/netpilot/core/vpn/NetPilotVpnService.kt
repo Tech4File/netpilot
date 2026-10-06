@@ -36,7 +36,11 @@ class NetPilotVpnService : VpnService() {
                 teardown()
                 return START_NOT_STICKY
             }
-            ACTION_CONNECT -> handleConnect(intent)
+            ACTION_CONNECT -> {
+                handleConnect(intent)
+                // Claim is live (Connecting...): refresh every visible screen.
+                TunnelEvents.notifyChanged()
+            }
             else -> {
                 teardown()
                 return START_NOT_STICKY
@@ -85,7 +89,12 @@ class NetPilotVpnService : VpnService() {
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         Thread {
             val up = runCatching { engine.open(descriptor, config) }.getOrDefault(false)
-            if (!up) main.post { if (channel === engine) teardown() }
+            if (!up) {
+                main.post { if (channel === engine) teardown() }
+            } else {
+                // TUN is live and the core reports CONNECTED.
+                main.post { TunnelEvents.notifyChanged() }
+            }
         }.start()
     }
 
@@ -103,6 +112,10 @@ class NetPilotVpnService : VpnService() {
     }
 
     private fun teardown() {
+        // Logical end of the tunnel FIRST: stopSelf/onDestroy are async and
+        // the UI must never hang on a "connected" flag for a dead tunnel
+        // (field-reported disconnect desync).
+        isRunning = false
         runningSession = null
         runningProfileId = null
         runCatching { channel?.close() }
@@ -111,6 +124,7 @@ class NetPilotVpnService : VpnService() {
         tun = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
+        TunnelEvents.notifyChanged()
     }
 
     private fun goForeground() {
@@ -154,6 +168,14 @@ class NetPilotVpnService : VpnService() {
                 NotificationChannel(CHANNEL_ID, getString(R.string.app_name), NotificationManager.IMPORTANCE_LOW)
             )
         }
+    }
+
+    override fun onRevoke() {
+        // The system took the VPN away (settings toggle, revoke, another VPN
+        // app). The engine is still pushing packets into a dead TUN — tear
+        // everything down and let the UI know.
+        teardown()
+        super.onRevoke()
     }
 
     override fun onDestroy() {

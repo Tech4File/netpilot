@@ -76,6 +76,7 @@ class SecureDnsVpnService : VpnService() {
         tun = descriptor
         output = FileOutputStream(descriptor.fileDescriptor)
         runningHostname = host
+        TunnelEvents.notifyChanged()
 
         // 3) Reader + small upstream query pool.
         val pool = Executors.newFixedThreadPool(QUERY_THREADS)
@@ -132,8 +133,10 @@ class SecureDnsVpnService : VpnService() {
     }
 
     private fun stopTunnel() {
+        val hadTunnel = runningHostname != null
         runningHostname = null
         providerHost = null
+        if (hadTunnel) TunnelEvents.notifyChanged()
         readerThread?.interrupt()
         readerThread = null
         queryPool?.let { pool ->

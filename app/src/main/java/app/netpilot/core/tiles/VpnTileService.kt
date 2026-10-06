@@ -27,7 +27,12 @@ import app.netpilot.core.vpn.WireGuardRuntime
  */
 class VpnTileService : TileService() {
 
-    override fun onStartListening() = render()
+    override fun onStartListening() {
+        // The tile is bound rarely; self-heal any marker drift first (the
+        // reconcile converges via TunnelEvents if it changes something).
+        WireGuardManager.get(this).reconcile()
+        render()
+    }
 
     override fun onClick() {
         val context = applicationContext

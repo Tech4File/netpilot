@@ -61,7 +61,30 @@ class WireGuardManager private constructor(context: Context) {
 
     private inner class NpTunnel(private val tunnelName: String) : Tunnel {
         override fun getName(): String = tunnelName
-        override fun onStateChange(newState: Tunnel.State) = Unit
+        override fun onStateChange(newState: Tunnel.State) {
+            // The backend can take the tunnel DOWN from OUTSIDE this manager:
+            // the system revoked the VPN (Android settings, consent revoke,
+            // another VPN app). Without this hook the runtime marker stayed
+            // "running" forever and the UI showed connected over a dead
+            // tunnel — the field-reported desync.
+            if (newState == Tunnel.State.DOWN) {
+                settleStoppedAsync()
+            }
+        }
+    }
+
+    /** Clears markers + boot pref and notifies the UI. Safe from any thread. */
+    private fun settleStoppedAsync() {
+        main.post {
+            currentTunnel = null
+            settleStopped()
+        }
+    }
+
+    private fun settleStopped() {
+        WireGuardRuntime.markStopped()
+        AppPreferences(appContext).vpnWasActiveEmbeddedWg = false
+        TunnelEvents.notifyChanged()
     }
 
     fun connect(
@@ -91,6 +114,8 @@ class WireGuardManager private constructor(context: Context) {
                     onSuccess = { tunnel ->
                         currentTunnel = tunnel
                         WireGuardRuntime.markStarted(profile.id, profile.name)
+                        AppPreferences(appContext).vpnWasActiveEmbeddedWg = true
+                        TunnelEvents.notifyChanged()
                         onResult(true, 0)
                     },
                     onFailure = { e ->
@@ -134,21 +159,82 @@ class WireGuardManager private constructor(context: Context) {
         sessionGeneration++
         val tunnel = currentTunnel
         if (tunnel == null) {
-            WireGuardRuntime.markStopped()
-            AppPreferences(appContext).vpnWasActiveEmbeddedWg = false
+            settleStopped()
             main.post { onDone() }
             return
         }
         Thread {
-            runCatching { backend.setState(tunnel, Tunnel.State.DOWN, null) }
+            // Put the tunnel down and VERIFY against the backend's own truth;
+            // one retry — a transient wg-go failure must not leave a zombie
+            // tunnel the app believes is off (field-reported: internet stayed
+            // dead until force-stop).
+            var down = putDown(tunnel)
+            if (!down) down = putDown(tunnel)
             main.post {
                 currentTunnel = null
-                WireGuardRuntime.markStopped()
-                AppPreferences(appContext).vpnWasActiveEmbeddedWg = false
+                settleStopped()
                 onDone()
             }
         }.start()
     }
+
+    private fun putDown(tunnel: NpTunnel): Boolean {
+        return try {
+            backend.setState(tunnel, Tunnel.State.DOWN, null)
+            backend.getRunningTunnelNames().isEmpty()
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Self-healing reconcile against the GoBackend's authoritative state.
+     * Fixes EVERY divergence trigger — system revoke, half-completed
+     * disconnect, lost bookkeeping — instead of trusting markers only our
+     * own paths wrote. Cheap (a map lookup in wg-go); fire-and-forget; the
+     * UI converges via [TunnelEvents] when something changed.
+     */
+    fun reconcile() {
+        if (reconcileInFlight) return
+        reconcileInFlight = true
+        Thread {
+            try {
+                val running = runCatching { backend.getRunningTunnelNames() }
+                    .getOrNull() ?: return@Thread
+                val tracked = currentTunnel
+                var changed = false
+                if (running.isEmpty()) {
+                    if (WireGuardRuntime.isRunning) {
+                        WireGuardRuntime.markStopped()
+                        AppPreferences(appContext).vpnWasActiveEmbeddedWg = false
+                        changed = true
+                    }
+                } else {
+                    // Zombies: tunnels the backend runs that we do not track.
+                    for (name in running) {
+                        if (tracked == null || name != tracked.name) {
+                            runCatching {
+                                backend.setState(NpTunnel(name), Tunnel.State.DOWN, null)
+                            }
+                            changed = true
+                        }
+                    }
+                    if (tracked != null && running.contains(tracked.name) && !WireGuardRuntime.isRunning) {
+                        // Real tunnel up, marks lost: re-own it honestly.
+                        WireGuardRuntime.markStarted("", tracked.name)
+                        AppPreferences(appContext).vpnWasActiveEmbeddedWg = true
+                        changed = true
+                    }
+                }
+                if (changed) TunnelEvents.notifyChangedAsync()
+            } finally {
+                reconcileInFlight = false
+            }
+        }.start()
+    }
+
+    @Volatile
+    private var reconcileInFlight = false
 
     private fun errorResFor(e: Throwable): Int = when {
         e is BackendException && e.reason == BackendException.Reason.VPN_NOT_AUTHORIZED ->

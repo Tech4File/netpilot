@@ -16,6 +16,8 @@ import app.netpilot.core.network.NetworkInfoProvider
 import app.netpilot.core.prefs.AppPreferences
 import app.netpilot.core.shizuku.ShizukuGranter
 import app.netpilot.core.vpn.EngineBridge
+import app.netpilot.core.vpn.TunnelEvents
+import app.netpilot.core.vpn.WireGuardManager
 import app.netpilot.core.vpn.SecureDnsVpnService
 import app.netpilot.core.vpn.VpnSessionState
 import app.netpilot.core.vpn.VpnStatusMonitor
@@ -99,16 +101,22 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         }
     }
 
+    private val tunnelListener = {
+        if (_binding != null) refresh()
+    }
+
     override fun onResume() {
         super.onResume()
         refresh()
         VpnStatusMonitor.addListener(this)
+        TunnelEvents.addListener(tunnelListener)
         dnsObserver = PrivateDnsManager.observe(requireContext()) { refresh() }
     }
 
     override fun onPause() {
         super.onPause()
         VpnStatusMonitor.removeListener(this)
+        TunnelEvents.removeListener(tunnelListener)
         PrivateDnsManager.stopObserving(requireContext(), dnsObserver)
         dnsObserver = null
     }
@@ -137,6 +145,9 @@ class DashboardFragment : Fragment(), VpnStatusMonitor.Listener {
         // Self-heal an abandoned VPN connect attempt (never show a stuck
         // "Connecting…" hero for a tunnel that will never appear).
         VpnSessionState.clearIfExpired(context, VpnStatusMonitor.isActive(context))
+        // Self-heal any marker/backend divergence (system revoke, a
+        // half-completed stop) before rendering; converges via TunnelEvents.
+        WireGuardManager.get(context).reconcile()
         val dns = PrivateDnsManager.read(context)
         val vpnActiveRaw = VpnStatusMonitor.isActive(context)
         val secureDnsOn = SecureDnsVpnService.runningHostname != null
