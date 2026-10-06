@@ -271,6 +271,29 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         val context = requireContext()
         // One VPN at a time: make room, then bring up the embedded engine.
         stopOtherTunnelsForNewVpn(silent = true)
+        if (!NetPilotVpnService.isRunning && !VpnStatusMonitor.isActive(context)) {
+            wgConnectNow(profile)
+            return
+        }
+        // The OpenVPN transport releases ASYNCHRONOUSLY (engine stop plus
+        // the system revoke of the old TUN). Starting the GoBackend while
+        // the previous TUN is still tearing down fails with tunnel errors.
+        // Wait, bounded, on a worker, then connect.
+        Thread {
+            val deadline = System.currentTimeMillis() + SWITCH_SETTLE_MS
+            while (System.currentTimeMillis() < deadline &&
+                (NetPilotVpnService.isRunning || VpnStatusMonitor.isActive(context))
+            ) {
+                runCatching { Thread.sleep(100) }
+            }
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (_binding != null) wgConnectNow(profile)
+            }
+        }.start()
+    }
+
+    private fun wgConnectNow(profile: VpnProfile) {
+        val context = context ?: return
         toast(getString(R.string.wg_connecting_toast))
         WireGuardManager.get(context).connect(
             profile,
@@ -361,6 +384,13 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
             if (prepare != null) {
                 pendingOpenVpnProfile = profile
                 consentLauncher.launch(prepare)
+            } else if (WireGuardRuntime.isRunning) {
+                // WG teardown is verified and callback-driven in the
+                // manager; chain the OVPN start off its completion -
+                // racing both engines produced switch failures.
+                WireGuardManager.get(requireContext()).disconnect {
+                    startOpenVpnService(profile)
+                }
             } else {
                 startOpenVpnService(profile)
             }
@@ -950,6 +980,9 @@ class VpnFragment : Fragment(), VpnStatusMonitor.Listener {
         android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show()
 
     private companion object {
+        /** Bounded wait for the previous tunnel to fully disappear on a cross-engine switch. */
+        private const val SWITCH_SETTLE_MS = 4_000L
+
         /** How long a claimed platform session may wait for its TUN to appear. */
         const val CONNECT_TIMEOUT_MS = 10_000L
     }

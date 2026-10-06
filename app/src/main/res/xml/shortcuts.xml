@@ -5,7 +5,7 @@
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
         android:enabled="true"
-        android:icon="@drawable/ic_dns"
+        android:icon="@drawable/ic_shortcut_dns"
         android:shortcutDisabledMessage="@string/shortcut_disabled"
         android:shortcutId="dns"
         android:shortcutLongLabel="@string/shortcut_dns_long"
@@ -21,7 +21,7 @@
     </shortcut>
     <shortcut
         android:enabled="true"
-        android:icon="@drawable/ic_vpn"
+        android:icon="@drawable/ic_shortcut_vpn"
         android:shortcutDisabledMessage="@string/shortcut_disabled"
         android:shortcutId="vpn"
         android:shortcutLongLabel="@string/shortcut_vpn_long"

@@ -53,7 +53,7 @@ class VpnTileService : TileService() {
             ).action
         ) {
             VpnTileState.Action.TOGGLE_OFF -> stopActiveTunnel(context)
-            VpnTileState.Action.CONNECT_LAST -> connectLast(context, target!!)
+            VpnTileState.Action.CONNECT_LAST -> connectLast(context, repo, target!!)
             VpnTileState.Action.OPEN_APP -> openApp()
         }
     }
@@ -74,7 +74,10 @@ class VpnTileService : TileService() {
         }
     }
 
-    private fun connectLast(context: Context, profile: VpnProfile) {
+    private fun connectLast(context: Context, repo: VpnProfileRepository, profile: VpnProfile) {
+        // The tile IS a last-used user action: record it so the switch, the
+        // tile and the row highlight agree on what "last used" is.
+        repo.setLastConnectedId(profile.id)
         when (profile.type) {
             VpnType.WIREGUARD ->
                 WireGuardManager.get(context).connect(profile, onResult = { _, _ -> render() })

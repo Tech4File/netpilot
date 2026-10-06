@@ -270,6 +270,26 @@ std::mutex g_client_mutex;
 std::shared_ptr<NetPilotClient> g_client;
 std::thread *g_worker = nullptr;
 
+// Stops the current session and frees it. Caller holds g_client_mutex and
+// passes a JNIEnv. Safe to call when no session exists. The core unwinds
+// promptly: the app closes the TUN fd BEFORE stopping, and stop() sets the
+// flag the connect loop checks.
+void stop_session_locked(JNIEnv *env)
+{
+    if (g_client == nullptr)
+        return;
+    g_client->stop();
+    if (g_worker != nullptr)
+    {
+        if (g_worker->joinable())
+            g_worker->join();
+        delete g_worker;
+        g_worker = nullptr;
+    }
+    env->DeleteGlobalRef(g_client->callbacksRef());
+    g_client.reset();
+}
+
 } // namespace
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *)
@@ -299,10 +319,14 @@ Java_app_netpilot_openvpn_core_OvpnNative_nativeStart(JNIEnv *env, jobject,
                                                        jint tunFd)
 {
     std::lock_guard<std::mutex> lk(g_client_mutex);
+    // SESSION REPLACEMENT: a previous session that has not fully stopped
+    // (the app stops it asynchronously) would make this start fail
+    // silently and leak the old tunnel as a system-visible zombie. Stop it
+    // right here, synchronously, before starting the new one.
     if (g_client != nullptr)
     {
-        ALOGW("nativeStart: session already running");
-        return JNI_FALSE;
+        ALOGI("nativeStart: replacing the still-running session");
+        stop_session_locked(env);
     }
 
     const char *cfg = env->GetStringUTFChars(config, nullptr);
@@ -369,27 +393,9 @@ Java_app_netpilot_openvpn_core_OvpnNative_nativeIsRunning(JNIEnv *, jobject)
 extern "C" JNIEXPORT void JNICALL
 Java_app_netpilot_openvpn_core_OvpnNative_nativeStop(JNIEnv *env, jobject)
 {
-    std::shared_ptr<NetPilotClient> client;
-    std::thread *worker = nullptr;
-    {
-        std::lock_guard<std::mutex> lk(g_client_mutex);
-        client = std::move(g_client);
-        worker = g_worker;
-        g_worker = nullptr;
-    }
-    if (client)
-    {
-        client->stop();
-        if (worker != nullptr)
-        {
-            if (worker->joinable())
-                worker->join();
-            delete worker;
-        }
-        env->DeleteGlobalRef(client->callbacksRef());
-        // Releasing the last reference frees the client; the core's own
-        // teardown (tun_builder_persist()==false) closes the TUN fd. If a
-        // concurrent nativeWaitConnected still holds a reference, the
-        // client is freed only after that wait returns.
-    }
+    std::lock_guard<std::mutex> lk(g_client_mutex);
+    // The helper stops, joins and frees under the same lock; a concurrent
+    // nativeWaitConnected keeps the client alive via its shared_ptr until
+    // its wait returns.
+    stop_session_locked(env);
 }

@@ -54,6 +54,18 @@ class NetPilotVpnService : VpnService() {
         runningProfileId = intent.getStringExtra(EXTRA_PROFILE_ID)
         goForeground()
 
+        // SESSION REPLACEMENT: a second CONNECT (double-tap, tile and app
+        // race, rapid profile switch) must not leak the previous session.
+        // A leaked core still holds its TUN, so the SYSTEM VPN stays up with
+        // no owning profile: no internet, tile and toggle dead, only a
+        // force-stop frees it.
+        channel?.let { old ->
+            channel = null
+            Thread { runCatching { old.close() } }.start()
+        }
+        runCatching { tun?.close() }
+        tun = null
+
         val raw = intent.getStringExtra(EXTRA_OVPN)
         val session = intent.getStringExtra(EXTRA_SESSION) ?: "NetPilot"
         val config = raw?.let { OvpnConfigParser.parse(it) }
@@ -76,18 +88,30 @@ class NetPilotVpnService : VpnService() {
             return
         }
 
-        val descriptor = establish(config) ?: run {
-            teardown()
-            return
-        }
-        tun = descriptor
         channel = engine
-        // engine.open() BLOCKS (it waits for the core's CONNECTED, up to
-        // ~30s). Running it here would freeze the main thread and ANR the
-        // app at the first connect — it runs on a worker; failures tear
-        // down on the main thread as everywhere else.
+        // Establish AND open on a worker: engine.open() blocks up to ~30 s
+        // (main-thread ANR if done here), and establish() must not race the
+        // previous TUN's asynchronous release — the settle wait below gives
+        // the old transport time to disappear before the new one is created.
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         Thread {
+            val deadline = System.currentTimeMillis() + SWITCH_SETTLE_MS
+            while (System.currentTimeMillis() < deadline &&
+                VpnStatusMonitor.isActive(this@NetPilotVpnService)
+            ) {
+                runCatching { Thread.sleep(100) }
+            }
+            val descriptor = runCatching { establish(config) }.getOrNull()
+            if (descriptor == null) {
+                main.post { if (channel === engine) teardown() }
+                return@Thread
+            }
+            if (channel !== engine) {
+                // Superseded while settling: drop the fresh TUN quietly.
+                runCatching { descriptor.close() }
+                return@Thread
+            }
+            tun = descriptor
             val up = runCatching { engine.open(descriptor, config) }.getOrDefault(false)
             if (!up) {
                 main.post { if (channel === engine) teardown() }
@@ -193,6 +217,9 @@ class NetPilotVpnService : VpnService() {
     }
 
     companion object {
+        /** Bounded wait for a prior tunnel transport to release during replacement. */
+        private const val SWITCH_SETTLE_MS = 4_000L
+
         const val ACTION_CONNECT = "app.netpilot.action.CONNECT"
 
         /** Reflects whether NetPilot's own VPN tunnel service is alive in this process. */
