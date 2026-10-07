@@ -129,6 +129,10 @@ class NetPilotVpnService : VpnService() {
             .addAddress(TUN_LOCAL_V4, 32)
             .addDnsServer(config.dhcpDns.firstOrNull() ?: TUN_DNS_FALLBACK)
             .addRoute("0.0.0.0", 0)
+        // Apps targeting API 29+ are METERED by default: browsers and
+        // download managers hold back transfers while the tunnel is up.
+        // false = inherit meteredness from the underlying network.
+        if (Build.VERSION.SDK_INT >= 29) builder.setMetered(false)
         if (Build.VERSION.SDK_INT >= 29) builder.setBlocking(false)
         builder.establish()
     } catch (_: Exception) {

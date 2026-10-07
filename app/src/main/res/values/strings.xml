@@ -278,10 +278,6 @@
     <!-- v2.1.0 — Quick Settings tile + background model -->
     <string name="tile_dns_label">NetPilot DNS</string>
     <string name="tile_dns_off">Off</string>
-    <string name="tile_dialog_dns_title">Private DNS</string>
-    <string name="tile_dialog_manage">Manage in NetPilot</string>
-    <string name="tile_dialog_no_profiles">No DNS profiles yet — add one in the app</string>
-    <string name="tile_dialog_active_prefix">✓ %1$s</string>
 
     <!-- v2.2.0 — access persistence (TV restarts), VPN tile, per-app VPN,
          boot reconnect, app shortcuts. See docs/ACCESS-PERSISTENCE.md. -->

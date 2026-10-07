@@ -127,6 +127,9 @@ class SecureDnsVpnService : VpnService() {
             .addDnsServer(TUN_ADDRESS)
             .addRoute(TUN_ADDRESS, 32)
             .setMtu(DEFAULT_MTU)
+            // Inherit meteredness (see NetPilotVpnService) instead of the
+            // API-29+ default of treating the VPN network as metered.
+            .apply { if (android.os.Build.VERSION.SDK_INT >= 29) setMetered(false) }
             .establish()
     } catch (_: Exception) {
         null

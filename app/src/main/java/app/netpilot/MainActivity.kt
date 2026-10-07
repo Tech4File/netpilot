@@ -38,6 +38,12 @@ class MainActivity : AppCompatActivity(), NavRailView.Callback {
     private var selectedTab: NavTab = NavTab.DASHBOARD
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // The app displays private keys and credentials; block screenshots
+        // and recents thumbnails (NCSC secure-development guidance).
+        window.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
+        )
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

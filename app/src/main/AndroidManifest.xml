@@ -182,27 +182,6 @@
             </intent-filter>
         </service>
 
-        <!-- The DNS tile pop-up: toggle + profile picker over the shade.
-             Launched only by our tile service (not exported). -->
-        <activity
-            android:name=".core.tiles.TileDialogActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:theme="@style/Theme.NetPilot.TileDialog" />
-
-        <!-- Long-press on either tile lands here: the system passes the
-             tile's component and the router opens the matching app tab
-             (VPN tile -> VPN page, DNS tile -> DNS page), then finishes. -->
-        <activity
-            android:name=".core.tiles.TileLongPressActivity"
-            android:exported="true"
-            android:excludeFromRecents="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
 
         <!-- One-shot reconnect of the last embedded WireGuard tunnel after a
              restart (Settings opt-in, default OFF). Fires ONCE per power-on:

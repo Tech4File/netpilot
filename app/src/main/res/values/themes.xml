@@ -30,12 +30,6 @@
 
     <style name="Theme.NetPilot.FullScreen" parent="Theme.NetPilot" />
 
-    <!-- Floating dialog theme for the Quick Settings tile pop-up: follows
-         the system DayNight palette (Material 3), dim backdrop. -->
-    <style name="Theme.NetPilot.TileDialog" parent="Theme.Material3.DayNight.Dialog">
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowSoftInputMode">adjustResize</item>
-    </style>
 
     <!-- Typography -->
     <style name="TextAppearance.NetPilot.Display" parent="TextAppearance.Material3.HeadlineMedium">

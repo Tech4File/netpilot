@@ -5,6 +5,7 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import app.netpilot.MainActivity
+import app.netpilot.ui.NavTab
 import app.netpilot.R
 import app.netpilot.core.dns.DnsProfileRepository
 import app.netpilot.core.model.DnsMode
@@ -34,15 +35,14 @@ class DnsTileService : TileService() {
             openApp()
             return
         }
-        // v2.4.0: the tap opens the pop-up — the on/off switch with the
-        // profile list underneath (the richer interaction modern tiles use;
-        // works on Android 9+ via startActivityAndCollapse, PendingIntent
-        // form on API 34+). The quick-toggle behaviour lives inside the
-        // pop-up's own switch.
+        // Open the app straight onto the Private DNS tab: switching and
+        // picking profiles happens there, in context. The tab extra is the
+        // same routing the app shortcuts use (handleLaunchIntent).
         TileLaunch.launchAndCollapse(
             this,
-            Intent(this, TileDialogActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            Intent(this, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_SHORTCUT_TAB, NavTab.PRIVATE_DNS.ordinal)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
         )
     }
 
