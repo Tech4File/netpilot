@@ -29,3 +29,6 @@ captures/
 
 # Releases / binaries
 releases/
+
+#local dev file
+scripts/sync-zip.sh
