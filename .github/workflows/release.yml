@@ -145,7 +145,7 @@ jobs:
 
       # Package the CI-built embedded OpenVPN engine (never committed).
       - name: Fetch engine libraries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ovpn-engine-libs
           path: openvpn-core/src/main/jniLibs
