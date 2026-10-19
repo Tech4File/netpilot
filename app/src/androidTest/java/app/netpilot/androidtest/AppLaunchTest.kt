@@ -37,7 +37,16 @@ class AppLaunchTest {
             .targetContext.packageManager.hasSystemFeature("android.software.leanback")
 
     @Before
-    fun dismissPermissionGuideIfPresent() {
+    fun wakeScreenAndDismissGuides() {
+        // Espresso requires the activity window to hold focus; on a freshly
+        // booted emulator the screen can be off or a keyguard up (observed
+        // on the API 35 image), which surfaces as
+        // RootViewWithoutFocusException for every UI test. Wake and unlock
+        // through the instrumentation's UiAutomation - a no-op when the
+        // device is already awake and unlocked.
+        val ui = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        runCatching { ui.executeShellCommand("input keyevent KEYCODE_WAKEUP") }
+        runCatching { ui.executeShellCommand("wm dismiss-keyguard") }
         // If the first-launch guide is up, the dialog window hides activity
         // views from Espresso — close it via its Done button, then continue.
         runCatching {

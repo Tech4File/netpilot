@@ -88,6 +88,11 @@ else
   echo "==> Skipping WRITE_SECURE_SETTINGS grant (ungranted leg: system-write tests will skip)"
 fi
 
+echo "==> Waking the emulator (RootViewWithoutFocusException guard)..."
+adb shell input keyevent KEYCODE_WAKEUP || true
+adb shell wm dismiss-keyguard || true
+sleep 1
+
 echo "==> Running instrumented tests..."
 # Two attempts: fresh-emulator flakes are real; deterministic failures fail
 # twice and still fail the build.
