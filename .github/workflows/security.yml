@@ -2,7 +2,7 @@ name: Security
 
 # Security — ALL scans in one workflow:
 #   CodeQL (code analysis) · secret leak scan (gitleaks) · dependency review
-#   (PRs) · build-hardening assertions · weekly scheduled deep scan.
+#   (PRs) · build-hardening assertions · on-demand deep scan.
 # CI = build & test only; Release = gated publishing. One home per concern.
 #
 # NOTE: we deliberately run the gitleaks CLI binary directly (MIT-licensed)
@@ -13,8 +13,7 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+  workflow_dispatch:
 
 permissions:
   contents: read
